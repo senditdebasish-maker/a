@@ -36,7 +36,10 @@ final class Env
 
     public static function get(string $key, mixed $default = null): mixed
     {
-        return self::$values[$key] ?? $_ENV[$key] ?? getenv($key) ?: $default;
+        if (array_key_exists($key, self::$values)) return self::$values[$key];
+        if (array_key_exists($key, $_ENV)) return $_ENV[$key];
+        $value = getenv($key);
+        return $value !== false ? $value : $default;
     }
 
     private static function cast(string $value): mixed
