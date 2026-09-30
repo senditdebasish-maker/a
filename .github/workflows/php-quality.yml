@@ -104,7 +104,11 @@ jobs:
             if curl --fail --silent http://127.0.0.1:8088/login >/dev/null; then break; fi
             sleep 1
           done
-          if ! php scripts/ci-http-smoke.php; then
+          if ! smoke_output=$(php scripts/ci-http-smoke.php 2>&1); then
+            printf '%s\n' "$smoke_output"
             cat storage/logs/ci-http-server.log
+            diagnostic=$(printf '%s' "$smoke_output" | tail -c 1500 | tr '\n' ' ')
+            echo "::error title=HTTP smoke failure::$diagnostic"
             exit 1
           fi
+          printf '%s\n' "$smoke_output"
