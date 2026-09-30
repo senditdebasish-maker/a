@@ -1,0 +1,1 @@
+<section class="error-page"><span>404</span><h1>That page isn’t here.</h1><p>The address may be outdated, or the page may have moved.</p><a class="button button-primary" href="<?= url() ?>">Return to homepage</a></section>

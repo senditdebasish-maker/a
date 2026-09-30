@@ -1,0 +1,1 @@
+<section class="error-page"><span>419</span><h1>Your session expired.</h1><p>For your protection, refresh the previous page and submit the form again.</p><a class="button button-primary" href="<?= url('login') ?>">Return to sign in</a></section>

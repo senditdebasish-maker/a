@@ -1,0 +1,1 @@
+<section class="error-page"><span>500</span><h1>Something went wrong.</h1><p>The incident has been recorded. Please try again or contact the system administrator.</p><a class="button button-primary" href="<?= url() ?>">Return to homepage</a></section>

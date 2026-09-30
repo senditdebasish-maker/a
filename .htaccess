@@ -1,0 +1,12 @@
+Options -Indexes
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:app|config|database|docs|resources|routes|scripts|storage|vendor)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:composer\.(?:json|lock)|README\.md)$ - [F,L,NC]
+    RewriteRule ^$ public/ [R=302,L]
+</IfModule>

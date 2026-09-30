@@ -1,0 +1,1 @@
+<section class="error-page"><span>403</span><h1>Access denied</h1><p>Your account does not have permission to open this area.</p><a class="button button-primary" href="<?= url(auth_user()?(App\Core\Auth::hasRole('applicant')?'student/dashboard':'admin/dashboard'):'login') ?>">Return to dashboard</a></section>

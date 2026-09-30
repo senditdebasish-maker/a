@@ -1,0 +1,749 @@
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    version VARCHAR(100) NOT NULL UNIQUE,
+    applied_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE settings (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    group_name VARCHAR(80) NOT NULL DEFAULT 'general',
+    key_name VARCHAR(120) NOT NULL UNIQUE,
+    value LONGTEXT NULL,
+    value_type VARCHAR(30) NOT NULL DEFAULT 'string',
+    is_public TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_settings_group (group_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE roles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(500) NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE permissions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    slug VARCHAR(120) NOT NULL UNIQUE,
+    module VARCHAR(80) NOT NULL,
+    description VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(80) NOT NULL,
+    last_name VARCHAR(80) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    mobile VARCHAR(20) NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    preferred_locale VARCHAR(10) NOT NULL DEFAULT 'en',
+    avatar_path VARCHAR(500) NULL,
+    email_verified_at DATETIME NULL,
+    email_verification_token VARCHAR(64) NULL,
+    email_verification_expires_at DATETIME NULL,
+    last_login_at DATETIME NULL,
+    last_login_ip VARCHAR(45) NULL,
+    password_changed_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    deleted_at DATETIME NULL,
+    INDEX idx_users_status (status),
+    INDEX idx_users_mobile (mobile),
+    INDEX idx_users_verify_token (email_verification_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_roles (
+    user_id BIGINT UNSIGNED NOT NULL,
+    role_id BIGINT UNSIGNED NOT NULL,
+    assigned_by BIGINT UNSIGNED NULL,
+    assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id),
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_roles_assigner FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE role_permissions (
+    role_id BIGINT UNSIGNED NOT NULL,
+    permission_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (role_id, permission_id),
+    CONSTRAINT fk_role_permissions_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE login_attempts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(190) NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    user_agent VARCHAR(500) NULL,
+    successful TINYINT(1) NOT NULL DEFAULT 0,
+    attempted_at DATETIME NOT NULL,
+    INDEX idx_login_lookup (email, ip_address, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mfa_challenges (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    code_hash VARCHAR(255) NOT NULL,
+    attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_mfa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_mfa_user (user_id, expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE password_resets (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_resets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_resets_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE departments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(160) NOT NULL,
+    code VARCHAR(30) NOT NULL UNIQUE,
+    description TEXT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE programs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    department_id BIGINT UNSIGNED NULL,
+    name VARCHAR(180) NOT NULL,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    slug VARCHAR(190) NOT NULL UNIQUE,
+    award_type VARCHAR(80) NOT NULL,
+    duration_years DECIMAL(3,1) NOT NULL,
+    total_semesters SMALLINT UNSIGNED NOT NULL,
+    summary TEXT NULL,
+    description LONGTEXT NULL,
+    eligibility_summary TEXT NULL,
+    career_summary TEXT NULL,
+    image_path VARCHAR(500) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_program_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
+    INDEX idx_programs_status (status, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE academic_sessions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(80) NOT NULL UNIQUE,
+    starts_on DATE NOT NULL,
+    ends_on DATE NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'upcoming',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE admission_cycles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    academic_session_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(160) NOT NULL,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    starts_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
+    correction_deadline DATETIME NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'draft',
+    instructions LONGTEXT NULL,
+    declaration_text LONGTEXT NULL,
+    application_number_prefix VARCHAR(30) NOT NULL DEFAULT 'NCP-APP',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_cycles_session FOREIGN KEY (academic_session_id) REFERENCES academic_sessions(id),
+    INDEX idx_cycles_status_dates (status, starts_at, ends_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE cycle_programs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admission_cycle_id BIGINT UNSIGNED NOT NULL,
+    program_id BIGINT UNSIGNED NOT NULL,
+    seat_capacity INT UNSIGNED NOT NULL DEFAULT 0,
+    application_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+    admission_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+    minimum_marks_general DECIMAL(5,2) NULL,
+    minimum_marks_reserved DECIMAL(5,2) NULL,
+    min_age SMALLINT UNSIGNED NULL,
+    max_age SMALLINT UNSIGNED NULL,
+    accepted_entrance_exams VARCHAR(500) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_cycle_program (admission_cycle_id, program_id),
+    CONSTRAINT fk_cycle_program_cycle FOREIGN KEY (admission_cycle_id) REFERENCES admission_cycles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cycle_program_program FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE eligibility_rules (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    cycle_program_id BIGINT UNSIGNED NOT NULL,
+    rule_type VARCHAR(80) NOT NULL,
+    field_name VARCHAR(100) NOT NULL,
+    operator VARCHAR(30) NOT NULL,
+    comparison_value VARCHAR(500) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    is_blocking TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_eligibility_cycle_program FOREIGN KEY (cycle_program_id) REFERENCES cycle_programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE seat_matrix (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    cycle_program_id BIGINT UNSIGNED NOT NULL,
+    category VARCHAR(80) NOT NULL,
+    quota VARCHAR(80) NOT NULL DEFAULT 'general',
+    seats INT UNSIGNED NOT NULL DEFAULT 0,
+    filled_seats INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_seat_matrix (cycle_program_id, category, quota),
+    CONSTRAINT fk_seats_cycle_program FOREIGN KEY (cycle_program_id) REFERENCES cycle_programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE document_types (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(160) NOT NULL,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    description VARCHAR(500) NULL,
+    allowed_mimes VARCHAR(500) NOT NULL DEFAULT 'application/pdf,image/jpeg,image/png',
+    max_size_mb INT UNSIGNED NOT NULL DEFAULT 5,
+    sort_order INT NOT NULL DEFAULT 0,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE cycle_document_requirements (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admission_cycle_id BIGINT UNSIGNED NOT NULL,
+    document_type_id BIGINT UNSIGNED NOT NULL,
+    program_id BIGINT UNSIGNED NULL,
+    category VARCHAR(80) NULL,
+    is_required TINYINT(1) NOT NULL DEFAULT 1,
+    stage VARCHAR(40) NOT NULL DEFAULT 'application',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uq_cycle_document (admission_cycle_id, document_type_id, program_id, category),
+    CONSTRAINT fk_cycle_documents_cycle FOREIGN KEY (admission_cycle_id) REFERENCES admission_cycles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cycle_documents_type FOREIGN KEY (document_type_id) REFERENCES document_types(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cycle_documents_program FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE applicant_profiles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    date_of_birth DATE NULL,
+    gender VARCHAR(40) NULL,
+    category VARCHAR(80) NULL,
+    nationality VARCHAR(80) NULL DEFAULT 'Indian',
+    blood_group VARCHAR(10) NULL,
+    religion VARCHAR(80) NULL,
+    mother_tongue VARCHAR(80) NULL,
+    disability_status VARCHAR(100) NULL,
+    disability_percentage DECIMAL(5,2) NULL,
+    government_id_type VARCHAR(50) NULL,
+    government_id_encrypted LONGTEXT NULL,
+    government_id_last4 VARCHAR(4) NULL,
+    photo_path VARCHAR(500) NULL,
+    signature_path VARCHAR(500) NULL,
+    profile_completion SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_profiles_category (category),
+    INDEX idx_profiles_gender (gender)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE applications (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_number VARCHAR(60) NULL UNIQUE,
+    user_id BIGINT UNSIGNED NOT NULL,
+    admission_cycle_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'draft',
+    current_step SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    completion_percentage SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    eligibility_status VARCHAR(40) NOT NULL DEFAULT 'not_evaluated',
+    eligibility_flags LONGTEXT NULL,
+    assigned_to BIGINT UNSIGNED NULL,
+    assigned_at DATETIME NULL,
+    submitted_at DATETIME NULL,
+    locked_at DATETIME NULL,
+    admitted_at DATETIME NULL,
+    withdrawal_reason TEXT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    deleted_at DATETIME NULL,
+    CONSTRAINT fk_applications_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_applications_cycle FOREIGN KEY (admission_cycle_id) REFERENCES admission_cycles(id),
+    CONSTRAINT fk_applications_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_user_cycle (user_id, admission_cycle_id),
+    INDEX idx_applications_status (status),
+    INDEX idx_applications_submitted (submitted_at),
+    INDEX idx_applications_assignee (assigned_to, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE applicant_addresses (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    address_line1 VARCHAR(200) NOT NULL,
+    address_line2 VARCHAR(200) NULL,
+    city VARCHAR(100) NOT NULL,
+    district VARCHAR(100) NULL,
+    state VARCHAR(100) NOT NULL,
+    postal_code VARCHAR(12) NOT NULL,
+    country VARCHAR(80) NOT NULL DEFAULT 'India',
+    same_as_correspondence TINYINT(1) NOT NULL DEFAULT 1,
+    correspondence_address TEXT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_addresses_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    INDEX idx_addresses_state (state),
+    INDEX idx_addresses_district (district)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE guardians (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    name VARCHAR(160) NOT NULL,
+    relationship VARCHAR(80) NOT NULL,
+    occupation VARCHAR(120) NULL,
+    annual_income DECIMAL(14,2) NULL,
+    mobile VARCHAR(20) NOT NULL,
+    email VARCHAR(190) NULL,
+    address TEXT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_guardians_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE education_records (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    level VARCHAR(50) NOT NULL,
+    board VARCHAR(180) NOT NULL,
+    institution VARCHAR(220) NOT NULL,
+    passing_year SMALLINT UNSIGNED NOT NULL,
+    roll_number VARCHAR(100) NULL,
+    registration_number VARCHAR(100) NULL,
+    total_marks DECIMAL(10,2) NULL,
+    obtained_marks DECIMAL(10,2) NULL,
+    percentage DECIMAL(6,2) NULL,
+    grade_cgpa VARCHAR(30) NULL,
+    subjects VARCHAR(500) NULL,
+    result_status VARCHAR(30) NOT NULL DEFAULT 'passed',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_education_level (application_id, level),
+    CONSTRAINT fk_education_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE entrance_exams (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    exam_name VARCHAR(120) NOT NULL,
+    roll_number VARCHAR(100) NULL,
+    rank_score VARCHAR(100) NULL,
+    percentile DECIMAL(7,3) NULL,
+    exam_year SMALLINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_exams_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE application_preferences (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    cycle_program_id BIGINT UNSIGNED NOT NULL,
+    preference_order SMALLINT UNSIGNED NOT NULL,
+    allocation_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uq_application_preference (application_id, cycle_program_id),
+    UNIQUE KEY uq_preference_order (application_id, preference_order),
+    CONSTRAINT fk_preferences_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    CONSTRAINT fk_preferences_cycle_program FOREIGN KEY (cycle_program_id) REFERENCES cycle_programs(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE application_documents (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    document_type_id BIGINT UNSIGNED NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT UNSIGNED NOT NULL,
+    checksum_sha256 VARCHAR(64) NOT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'pending',
+    review_remarks VARCHAR(1000) NULL,
+    reviewed_by BIGINT UNSIGNED NULL,
+    reviewed_at DATETIME NULL,
+    uploaded_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_application_document (application_id, document_type_id),
+    CONSTRAINT fk_app_documents_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    CONSTRAINT fk_app_documents_type FOREIGN KEY (document_type_id) REFERENCES document_types(id),
+    CONSTRAINT fk_app_documents_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_documents_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE application_status_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    from_status VARCHAR(40) NULL,
+    to_status VARCHAR(40) NOT NULL,
+    remarks TEXT NULL,
+    changed_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_status_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    CONSTRAINT fk_status_user FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_status_history (application_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE staff_notes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    note TEXT NOT NULL,
+    visibility VARCHAR(30) NOT NULL DEFAULT 'staff',
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_notes_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    CONSTRAINT fk_notes_user FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_notes_application (application_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE application_declarations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    declaration_version VARCHAR(30) NOT NULL,
+    accepted TINYINT(1) NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    accepted_at DATETIME NOT NULL,
+    CONSTRAINT fk_declarations_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE payments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(60) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    method VARCHAR(50) NOT NULL,
+    reference_number VARCHAR(150) NOT NULL,
+    proof_path VARCHAR(500) NULL,
+    proof_original_name VARCHAR(255) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    verification_remarks VARCHAR(1000) NULL,
+    verified_by BIGINT UNSIGNED NULL,
+    verified_at DATETIME NULL,
+    receipt_number VARCHAR(80) NULL UNIQUE,
+    paid_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_payments_application FOREIGN KEY (application_id) REFERENCES applications(id),
+    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_payments_verifier FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_payments_status (status),
+    INDEX idx_payments_reference (reference_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE student_enrollments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    user_id BIGINT UNSIGNED NOT NULL,
+    cycle_program_id BIGINT UNSIGNED NULL,
+    enrollment_number VARCHAR(80) NOT NULL UNIQUE,
+    university_roll_number VARCHAR(100) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    enrolled_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NULL,
+    CONSTRAINT fk_enrollment_application FOREIGN KEY (application_id) REFERENCES applications(id),
+    CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_enrollment_program FOREIGN KEY (cycle_program_id) REFERENCES cycle_programs(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE generated_documents (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    document_kind VARCHAR(80) NOT NULL,
+    document_number VARCHAR(100) NULL,
+    path VARCHAR(500) NULL,
+    checksum_sha256 VARCHAR(64) NULL,
+    version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    generated_by BIGINT UNSIGNED NULL,
+    generated_at DATETIME NOT NULL,
+    invalidated_at DATETIME NULL,
+    CONSTRAINT fk_generated_application FOREIGN KEY (application_id) REFERENCES applications(id),
+    CONSTRAINT fk_generated_user FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_generated_kind (application_id, document_kind)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notifications (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(60) NOT NULL,
+    title VARCHAR(180) NOT NULL,
+    message TEXT NOT NULL,
+    action_url VARCHAR(500) NULL,
+    read_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_notifications_user (user_id, read_at, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mail_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    recipient VARCHAR(190) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    template_key VARCHAR(100) NULL,
+    body_html LONGTEXT NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    error_message TEXT NULL,
+    created_at DATETIME NOT NULL,
+    sent_at DATETIME NULL,
+    INDEX idx_mail_status (status, created_at),
+    INDEX idx_mail_recipient (recipient)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE support_tickets (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_number VARCHAR(60) NOT NULL UNIQUE,
+    user_id BIGINT UNSIGNED NOT NULL,
+    application_id BIGINT UNSIGNED NULL,
+    assigned_to BIGINT UNSIGNED NULL,
+    subject VARCHAR(180) NOT NULL,
+    category VARCHAR(60) NOT NULL,
+    priority VARCHAR(30) NOT NULL DEFAULT 'normal',
+    status VARCHAR(30) NOT NULL DEFAULT 'open',
+    closed_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_tickets_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_tickets_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tickets_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_tickets_status (status, priority),
+    INDEX idx_tickets_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ticket_messages (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    message TEXT NOT NULL,
+    attachment_path VARCHAR(500) NULL,
+    is_staff_reply TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_ticket_messages_ticket FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ticket_messages_user FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_ticket_messages (ticket_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE pages (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    slug VARCHAR(190) NOT NULL UNIQUE,
+    eyebrow VARCHAR(120) NULL,
+    excerpt TEXT NULL,
+    body LONGTEXT NULL,
+    template VARCHAR(80) NOT NULL DEFAULT 'standard',
+    hero_image VARCHAR(500) NULL,
+    meta_title VARCHAR(255) NULL,
+    meta_description VARCHAR(500) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'draft',
+    published_at DATETIME NULL,
+    created_by BIGINT UNSIGNED NULL,
+    updated_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_pages_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_pages_updater FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_pages_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE content_translations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entity_type VARCHAR(80) NOT NULL,
+    entity_id BIGINT UNSIGNED NOT NULL,
+    locale VARCHAR(10) NOT NULL,
+    fields_json LONGTEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_content_translation (entity_type, entity_id, locale),
+    INDEX idx_translation_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(190) NOT NULL UNIQUE,
+    category VARCHAR(80) NOT NULL DEFAULT 'general',
+    excerpt TEXT NULL,
+    body LONGTEXT NULL,
+    attachment_path VARCHAR(500) NULL,
+    is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+    audience VARCHAR(80) NOT NULL DEFAULT 'public',
+    status VARCHAR(30) NOT NULL DEFAULT 'draft',
+    published_at DATETIME NULL,
+    expires_at DATE NULL,
+    created_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_notices_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_notices_public (status, is_pinned, published_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE facilities (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(180) NOT NULL,
+    slug VARCHAR(190) NOT NULL UNIQUE,
+    icon VARCHAR(80) NULL,
+    summary TEXT NULL,
+    description LONGTEXT NULL,
+    image_path VARCHAR(500) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'published',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE faculty (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    department_id BIGINT UNSIGNED NULL,
+    name VARCHAR(180) NOT NULL,
+    designation VARCHAR(160) NOT NULL,
+    qualifications VARCHAR(500) NULL,
+    specialisation VARCHAR(300) NULL,
+    bio TEXT NULL,
+    email VARCHAR(190) NULL,
+    photo_path VARCHAR(500) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_faculty_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE faqs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    category VARCHAR(80) NOT NULL DEFAULT 'admissions',
+    question VARCHAR(500) NOT NULL,
+    answer TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'published',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE gallery_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(180) NOT NULL,
+    caption VARCHAR(500) NULL,
+    image_path VARCHAR(500) NOT NULL,
+    album VARCHAR(100) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'published',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE contact_submissions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(190) NOT NULL,
+    phone VARCHAR(20) NULL,
+    subject VARCHAR(180) NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'new',
+    assigned_to BIGINT UNSIGNED NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL,
+    responded_at DATETIME NULL,
+    CONSTRAINT fk_contacts_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_contacts_status (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE media (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    uploaded_by BIGINT UNSIGNED NULL,
+    disk VARCHAR(30) NOT NULL DEFAULT 'public',
+    path VARCHAR(500) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT UNSIGNED NOT NULL,
+    alt_text VARCHAR(255) NULL,
+    checksum_sha256 VARCHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_media_user FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE consent_records (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NULL,
+    application_id BIGINT UNSIGNED NULL,
+    consent_type VARCHAR(100) NOT NULL,
+    purpose VARCHAR(500) NULL,
+    version VARCHAR(30) NOT NULL,
+    granted TINYINT(1) NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    withdrawn_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_consents_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_consents_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE SET NULL,
+    INDEX idx_consents_lookup (user_id, consent_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NULL,
+    action VARCHAR(120) NOT NULL,
+    entity_type VARCHAR(120) NOT NULL,
+    entity_id VARCHAR(100) NULL,
+    old_values LONGTEXT NULL,
+    new_values LONGTEXT NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_audit_entity (entity_type, entity_id),
+    INDEX idx_audit_user_time (user_id, created_at),
+    INDEX idx_audit_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE backup_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(500) NOT NULL,
+    size_bytes BIGINT UNSIGNED NULL,
+    checksum_sha256 VARCHAR(64) NULL,
+    encrypted TINYINT(1) NOT NULL DEFAULT 1,
+    status VARCHAR(30) NOT NULL,
+    initiated_by BIGINT UNSIGNED NULL,
+    error_message TEXT NULL,
+    created_at DATETIME NOT NULL,
+    completed_at DATETIME NULL,
+    CONSTRAINT fk_backups_user FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_migrations (version, applied_at) VALUES ('001_initial_schema', NOW());
+SET FOREIGN_KEY_CHECKS = 1;
