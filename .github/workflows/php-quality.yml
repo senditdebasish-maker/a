@@ -26,3 +26,37 @@ jobs:
       - run: composer install --no-interaction --no-progress --prefer-dist
       - name: Lint PHP files
         run: find app config database public resources routes scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+
+  database-smoke:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ncp_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      CI: 'true'
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: ncp_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring
+          coverage: none
+      - name: Import MySQL schema
+        run: mysql -h 127.0.0.1 -uroot -proot ncp_test < database/schema.mysql.sql
+      - name: Exercise production seeder
+        run: php scripts/ci-database-smoke.php
