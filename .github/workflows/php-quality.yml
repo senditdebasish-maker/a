@@ -54,9 +54,57 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: pdo_mysql, mbstring
+          extensions: pdo_mysql, mbstring, openssl, fileinfo, json, zip, gd, curl, xml
+          tools: composer:v2
           coverage: none
+      - run: composer install --no-interaction --no-progress --prefer-dist
       - name: Import MySQL schema
         run: mysql -h 127.0.0.1 -uroot -proot ncp_test < database/schema.mysql.sql
       - name: Exercise production seeder
         run: php scripts/ci-database-smoke.php
+      - name: Configure CI application
+        run: |
+          cat > .env <<'ENV'
+          APP_NAME="CI Pharmacy College"
+          APP_ENV=testing
+          APP_DEBUG=true
+          APP_URL=http://127.0.0.1:8088
+          APP_KEY=base64:Q0ktT25seS1UZXN0LUtleS0zMi1CeXRlcy0wMDAwMDA=
+          APP_TIMEZONE=Asia/Kolkata
+          APP_LOCALE=en
+          APP_FALLBACK_LOCALE=en
+          APP_CURRENCY=INR
+          APP_DATE_FORMAT=d-m-Y
+          APP_INSTALLED=true
+          DB_DRIVER=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=ncp_test
+          DB_USERNAME=root
+          DB_PASSWORD=root
+          DB_CHARSET=utf8mb4
+          SESSION_NAME=ncp_ci_session
+          SESSION_LIFETIME=120
+          SESSION_SECURE=false
+          MAIL_DRIVER=log
+          MAIL_FROM_ADDRESS=ci@example.test
+          MAIL_FROM_NAME="CI Pharmacy College"
+          UPLOAD_MAX_MB=5
+          BACKUP_ENCRYPTION=true
+          BACKUP_RETENTION_DAYS=30
+          REQUIRE_STAFF_MFA=false
+          ENV
+      - name: Exercise public, applicant, staff, CMS and PDF routes
+        run: |
+          mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private
+          php -S 127.0.0.1:8088 -t public public/index.php > storage/logs/ci-http-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8088/login >/dev/null; then break; fi
+            sleep 1
+          done
+          if ! php scripts/ci-http-smoke.php; then
+            cat storage/logs/ci-http-server.log
+            exit 1
+          fi
