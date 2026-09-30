@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Flash;
 use App\Services\AuditService;
+use App\Services\EligibilityService;
 
 final class ApplicationController extends Controller
 {
@@ -19,7 +20,11 @@ final class ApplicationController extends Controller
         $search = trim((string) ($_GET['q'] ?? ''));
         $where = ['1=1']; $params = [];
         if ($status !== '') { $where[] = 'a.status = :status'; $params['status'] = $status; }
-        if ($search !== '') { $where[] = "(a.application_number LIKE :search OR u.first_name LIKE :search OR u.last_name LIKE :search OR u.email LIKE :search OR u.mobile LIKE :search)"; $params['search'] = '%' . $search . '%'; }
+        if ($search !== '') {
+            $where[] = '(a.application_number LIKE :search_number OR u.first_name LIKE :search_first OR u.last_name LIKE :search_last OR u.email LIKE :search_email OR u.mobile LIKE :search_mobile)';
+            $term = '%' . $search . '%';
+            $params += ['search_number' => $term, 'search_first' => $term, 'search_last' => $term, 'search_email' => $term, 'search_mobile' => $term];
+        }
         $applications = $db->all("SELECT a.*, CONCAT(u.first_name, ' ', u.last_name) AS applicant_name, u.email, u.mobile, ac.name AS cycle_name,
             CONCAT(reviewer.first_name, ' ', reviewer.last_name) AS reviewer_name
             FROM applications a JOIN users u ON u.id = a.user_id JOIN admission_cycles ac ON ac.id = a.admission_cycle_id
@@ -35,6 +40,7 @@ final class ApplicationController extends Controller
             ac.name AS cycle_name, ap.*, a.id AS id, a.status AS status FROM applications a JOIN users u ON u.id = a.user_id
             JOIN admission_cycles ac ON ac.id = a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id = a.user_id WHERE a.id = :id", ['id' => (int) $id]);
         if (!$application) { http_response_code(404); $this->view('errors/404', ['title' => 'Application not found'], 'admin'); return; }
+        $eligibilityFlags = json_decode((string) ($application['eligibility_flags'] ?? ''), true) ?: [];
         $address = $db->fetch('SELECT * FROM applicant_addresses WHERE application_id = :id', ['id' => $id]);
         $guardian = $db->fetch('SELECT * FROM guardians WHERE application_id = :id', ['id' => $id]);
         $education = $db->all('SELECT * FROM education_records WHERE application_id = :id ORDER BY level', ['id' => $id]);
@@ -44,7 +50,19 @@ final class ApplicationController extends Controller
         $timeline = $db->all('SELECT ash.*, CONCAT(u.first_name, " ", u.last_name) AS changed_by_name FROM application_status_history ash LEFT JOIN users u ON u.id = ash.changed_by WHERE ash.application_id = :id ORDER BY ash.created_at DESC', ['id' => $id]);
         $notes = $db->all('SELECT n.*, CONCAT(u.first_name, " ", u.last_name) AS author_name FROM staff_notes n JOIN users u ON u.id = n.user_id WHERE n.application_id = :id ORDER BY n.created_at DESC', ['id' => $id]);
         $reviewers = $db->all("SELECT DISTINCT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id WHERE r.slug IN ('super-admin','admission-officer','reviewer') AND u.status = 'active' ORDER BY name");
-        $this->view('admin/applications/show', compact('application', 'address', 'guardian', 'education', 'preferences', 'documents', 'payments', 'timeline', 'notes', 'reviewers') + ['title' => $application['application_number'] ?: 'Draft application'], 'admin');
+        $this->view('admin/applications/show', compact('application', 'eligibilityFlags', 'address', 'guardian', 'education', 'preferences', 'documents', 'payments', 'timeline', 'notes', 'reviewers') + ['title' => $application['application_number'] ?: 'Draft application'], 'admin');
+    }
+
+    public function evaluateEligibility(string $id): never
+    {
+        try {
+            $result = (new EligibilityService())->evaluate((int) $id);
+            AuditService::log('eligibility_evaluated', 'application', $id, [], $result);
+            Flash::set('success', 'Eligibility checks completed: ' . ucwords(str_replace('_', ' ', $result['status'])) . '. Final decisions remain with authorised officers.');
+        } catch (\Throwable $exception) {
+            Flash::set('warning', 'Eligibility could not be evaluated: ' . $exception->getMessage());
+        }
+        $this->redirect('admin/applications/' . $id . '#academic');
     }
 
     public function status(string $id): never
@@ -52,9 +70,14 @@ final class ApplicationController extends Controller
         $db = Database::get();
         $application = $db->fetch('SELECT * FROM applications WHERE id = :id', ['id' => (int) $id]);
         $next = (string) ($_POST['status'] ?? '');
-        $allowed = ['submitted','under_review','correction_required','approved','selected','rejected','fee_verified','admitted','withdrawn'];
-        if (!$application || !in_array($next, $allowed, true)) {
-            Flash::set('warning', 'Invalid application status.'); $this->redirect('admin/applications/' . $id);
+        $transitions = [
+            'draft' => ['submitted'], 'submitted' => ['under_review','correction_required','approved','selected','rejected'],
+            'under_review' => ['correction_required','approved','selected','rejected'], 'correction_required' => ['submitted','under_review','rejected'],
+            'approved' => ['selected','rejected'], 'selected' => ['fee_verified','rejected','withdrawn'],
+            'fee_verified' => ['admitted','withdrawn'], 'admitted' => ['withdrawn'], 'rejected' => ['under_review'], 'withdrawn' => [],
+        ];
+        if (!$application || !in_array($next, $transitions[$application['status']] ?? [], true)) {
+            Flash::set('warning', 'That workflow transition is not allowed from the current status.'); $this->redirect('admin/applications/' . $id);
         }
         $remarks = trim((string) ($_POST['remarks'] ?? ''));
         if (in_array($next, ['correction_required','rejected'], true) && $remarks === '') {
@@ -130,11 +153,21 @@ final class ApplicationController extends Controller
         $status = (string) ($_POST['status'] ?? '');
         if (!in_array($status, ['verified','rejected'], true)) { Flash::set('warning', 'Invalid payment decision.'); $this->redirect('admin/applications/' . $id); }
         $remarks = trim((string) ($_POST['remarks'] ?? ''));
+        if ($status === 'rejected' && $remarks === '') { Flash::set('warning', 'Add a reason when rejecting a payment.'); $this->redirect('admin/applications/' . $id . '#payments'); }
         $db = Database::get();
         $payment = $db->fetch('SELECT * FROM payments WHERE id = :payment AND application_id = :application', ['payment' => (int) $paymentId, 'application' => (int) $id]);
         if (!$payment) { Flash::set('warning', 'Payment not found.'); $this->redirect('admin/applications/' . $id); }
         $receipt = $status === 'verified' ? 'NCP-RCT-' . date('Y') . '-' . str_pad((string) $payment['id'], 6, '0', STR_PAD_LEFT) : null;
         $db->update('payments', ['status' => $status, 'verification_remarks' => $remarks, 'verified_by' => Auth::id(), 'verified_at' => date('Y-m-d H:i:s'), 'receipt_number' => $receipt, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $payment['id']]);
+        if ($status === 'verified' && $payment['type'] === 'admission_fee') {
+            $application = $db->fetch('SELECT status FROM applications WHERE id = :id', ['id' => (int) $id]);
+            if ($application && $application['status'] === 'selected') {
+                $db->update('applications', ['status' => 'fee_verified', 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => (int) $id]);
+                $db->insert('application_status_history', ['application_id' => (int) $id, 'from_status' => 'selected', 'to_status' => 'fee_verified', 'remarks' => 'Admission fee verified by Accounts', 'changed_by' => Auth::id(), 'created_at' => date('Y-m-d H:i:s')]);
+                $applicantId = (int) $db->scalar('SELECT user_id FROM applications WHERE id = :id', ['id' => (int) $id]);
+                $db->insert('notifications', ['user_id' => $applicantId, 'type' => 'payment', 'title' => 'Admission fee verified', 'message' => 'Accounts verified your admission fee. Follow the dashboard for the admission confirmation step.', 'action_url' => '/student/payments', 'read_at' => null, 'created_at' => date('Y-m-d H:i:s')]);
+            }
+        }
         AuditService::log('payment_reviewed', 'payment', $payment['id'], ['status' => $payment['status']], ['status' => $status]);
         Flash::set('success', 'Payment verification saved.');
         $this->redirect('admin/applications/' . $id . '#payments');

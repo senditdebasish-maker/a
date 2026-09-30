@@ -48,7 +48,7 @@ final class SupportController extends Controller
         $db->transaction(function (Database $db) use ($ticket, $message, $status): void {
             $db->insert('ticket_messages', ['ticket_id' => $ticket['id'], 'user_id' => Auth::id(), 'message' => $message, 'attachment_path' => null, 'is_staff_reply' => 1, 'created_at' => date('Y-m-d H:i:s')]);
             $db->update('support_tickets', ['status' => $status, 'assigned_to' => Auth::id(), 'closed_at' => $status === 'closed' ? date('Y-m-d H:i:s') : null, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $ticket['id']]);
-            $db->insert('notifications', ['user_id' => $ticket['user_id'], 'type' => 'support', 'title' => 'Support ticket updated', 'message' => 'The admissions team replied to ' . $ticket['ticket_number'] . '.', 'action_url' => '/student/support', 'read_at' => null, 'created_at' => date('Y-m-d H:i:s')]);
+            $db->insert('notifications', ['user_id' => $ticket['user_id'], 'type' => 'support', 'title' => 'Support ticket updated', 'message' => 'The admissions team replied to ' . $ticket['ticket_number'] . '.', 'action_url' => '/student/support/' . $ticket['id'], 'read_at' => null, 'created_at' => date('Y-m-d H:i:s')]);
         });
         AuditService::log('support_ticket_replied', 'support_ticket', $id, ['status' => $ticket['status']], ['status' => $status]);
         Flash::set('success', 'Reply sent and the applicant was notified.');

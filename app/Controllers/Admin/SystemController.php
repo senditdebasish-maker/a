@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Validator;
 use App\Services\AuditService;
 use App\Services\BackupService;
+use App\Services\MailService;
 use Throwable;
 
 final class SystemController extends Controller
@@ -121,6 +123,14 @@ final class SystemController extends Controller
     public function updateSettings(): never
     {
         $allowed = ['college_name','college_short_name','college_email','college_phone','college_address','upi_id','bank_details','aadhaar_collection_stage','privacy_contact','primary_color'];
+        if (isset($_POST['aadhaar_collection_stage']) && !in_array($_POST['aadhaar_collection_stage'], ['disabled','application','post_selection','admission','configurable'], true)) {
+            Flash::set('warning', 'Invalid Aadhaar collection policy.');
+            $this->redirect('admin/settings#admission');
+        }
+        if (isset($_POST['aadhaar_collection_stage']) && $_POST['aadhaar_collection_stage'] !== 'disabled' && !isset($_POST['aadhaar_compliance_ack'])) {
+            Flash::set('warning', 'Confirm the Aadhaar compliance acknowledgement before enabling collection.');
+            $this->redirect('admin/settings#admission');
+        }
         $db = Database::get();
         foreach ($allowed as $key) {
             if (!array_key_exists($key, $_POST)) continue;
@@ -129,7 +139,7 @@ final class SystemController extends Controller
             if ($existing) $db->update('settings', ['value' => $value, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $existing['id']]);
             else $db->insert('settings', ['group_name' => 'college', 'key_name' => $key, 'value' => $value, 'is_public' => 0, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
         }
-        AuditService::log('settings_updated', 'settings');
+        AuditService::log('settings_updated', 'settings', null, [], ['aadhaar_stage' => $_POST['aadhaar_collection_stage'] ?? null, 'aadhaar_compliance_acknowledged' => isset($_POST['aadhaar_compliance_ack'])]);
         Flash::set('success', 'Settings updated.');
         $this->redirect('admin/settings');
     }
@@ -225,12 +235,22 @@ final class SystemController extends Controller
         if ($status === 'open' && empty($_POST['opening_ack'])) {
             Flash::set('warning', 'Opening a cycle requires the institutional compliance acknowledgement.'); $this->redirect('admin/settings#cycles');
         }
+        $aadhaarStage = in_array($_POST['aadhaar_collection_stage'] ?? '', ['disabled','application','post_selection','admission'], true) ? $_POST['aadhaar_collection_stage'] : 'disabled';
+        if ($aadhaarStage !== 'disabled' && empty($_POST['aadhaar_ack'])) {
+            Flash::set('warning', 'A non-disabled Aadhaar stage requires the intake-specific compliance acknowledgement.'); $this->redirect('admin/settings#cycles');
+        }
         $new = [
             'name' => trim((string) ($_POST['name'] ?? $cycle['name'])), 'starts_at' => date('Y-m-d H:i:s', strtotime($startsAt)),
             'ends_at' => date('Y-m-d H:i:s', strtotime($endsAt)), 'correction_deadline' => !empty($_POST['correction_deadline']) ? date('Y-m-d H:i:s', strtotime(str_replace('T', ' ', (string) $_POST['correction_deadline']))) : null,
             'status' => $status, 'instructions' => trim((string) ($_POST['instructions'] ?? '')), 'updated_at' => date('Y-m-d H:i:s'),
         ];
         $db->update('admission_cycles', $new, 'id = :id', ['id' => (int) $id]);
+        $settingKey = 'aadhaar_collection_stage_cycle_' . (int) $id;
+        $stageSetting = $db->fetch('SELECT id FROM settings WHERE key_name = :key', ['key' => $settingKey]);
+        $settingData = ['group_name' => 'admissions', 'value' => $aadhaarStage, 'is_public' => 0, 'updated_at' => date('Y-m-d H:i:s')];
+        $stageSetting ? $db->update('settings', $settingData, 'id = :id', ['id' => $stageSetting['id']]) : $db->insert('settings', $settingData + ['key_name' => $settingKey, 'created_at' => date('Y-m-d H:i:s')]);
+        $new['aadhaar_collection_stage'] = $aadhaarStage;
+        $new['aadhaar_compliance_acknowledged'] = isset($_POST['aadhaar_ack']);
         AuditService::log('admission_cycle_updated', 'admission_cycle', $id, $cycle, $new);
         Flash::set('success', 'Admission cycle updated.');
         $this->redirect('admin/settings#cycles');
@@ -278,6 +298,59 @@ final class SystemController extends Controller
         AuditService::log('document_requirement_updated', 'cycle_document_requirement', $id, $requirement, $new);
         Flash::set('success', 'Document checklist updated.');
         $this->redirect('admin/settings#cycles');
+    }
+
+    public function enquiries(): void
+    {
+        $db = Database::get();
+        $status = (string) ($_GET['status'] ?? '');
+        $allowed = ['new','in_progress','replied','closed','spam'];
+        $where = in_array($status, $allowed, true) ? 'WHERE status = :status' : '';
+        $params = $where ? ['status' => $status] : [];
+        $enquiries = $db->all("SELECT * FROM contact_submissions {$where} ORDER BY created_at DESC LIMIT 300", $params);
+        $selected = !empty($_GET['view']) ? $db->fetch('SELECT * FROM contact_submissions WHERE id = :id', ['id' => (int) $_GET['view']]) : null;
+        if ($selected && $selected['status'] === 'new') {
+            $db->update('contact_submissions', ['status' => 'in_progress', 'assigned_to' => Auth::id()], 'id = :id', ['id' => $selected['id']]);
+            $selected['status'] = 'in_progress';
+            AuditService::log('contact_enquiry_assigned', 'contact_submission', $selected['id'], ['status' => 'new'], ['status' => 'in_progress']);
+        }
+        if ($selected) AuditService::log('contact_enquiry_viewed', 'contact_submission', $selected['id']);
+        $this->view('admin/enquiries', compact('enquiries', 'selected', 'status') + ['title' => 'Contact enquiries'], 'admin');
+    }
+
+    public function updateEnquiry(string $id): never
+    {
+        $db = Database::get();
+        $enquiry = $db->fetch('SELECT * FROM contact_submissions WHERE id = :id', ['id' => (int) $id]);
+        $status = (string) ($_POST['status'] ?? '');
+        if (!$enquiry || !in_array($status, ['new','in_progress','replied','closed','spam'], true)) { Flash::set('warning', 'Enquiry or status not found.'); $this->redirect('admin/enquiries'); }
+        $data = ['status' => $status, 'assigned_to' => Auth::id()];
+        if (in_array($status, ['replied','closed'], true)) $data['responded_at'] = date('Y-m-d H:i:s');
+        $db->update('contact_submissions', $data, 'id = :id', ['id' => (int) $id]);
+        AuditService::log('contact_enquiry_updated', 'contact_submission', $id, ['status' => $enquiry['status']], ['status' => $status]);
+        Flash::set('success', 'Enquiry marked ' . str_replace('_', ' ', $status) . '.');
+        $this->redirect('admin/enquiries?view=' . $id);
+    }
+
+    public function replyEnquiry(string $id): never
+    {
+        $db = Database::get();
+        $enquiry = $db->fetch('SELECT * FROM contact_submissions WHERE id = :id', ['id' => (int) $id]);
+        $message = trim((string) ($_POST['message'] ?? ''));
+        if (!$enquiry || mb_strlen($message) < 5 || mb_strlen($message) > 5000) {
+            Flash::set('warning', 'Enter a reply between 5 and 5,000 characters.');
+            $this->redirect('admin/enquiries?view=' . $id);
+        }
+        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+        $html = '<p>Dear ' . htmlspecialchars((string) $enquiry['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ',</p><p>' . $safeMessage . '</p><p>Regards,<br>Admissions Office<br>Netaji College of Pharmacy</p>';
+        if (!(new MailService())->send((string) $enquiry['email'], 'Re: ' . preg_replace('/[\r\n]+/', ' ', (string) $enquiry['subject']), $html, 'contact-enquiry-reply')) {
+            Flash::set('warning', 'Email delivery failed. Review Admin → Email log before trying again.');
+            $this->redirect('admin/enquiries?view=' . $id);
+        }
+        $db->update('contact_submissions', ['status' => 'replied', 'assigned_to' => Auth::id(), 'responded_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => (int) $id]);
+        AuditService::log('contact_enquiry_replied', 'contact_submission', $id, ['status' => $enquiry['status']], ['status' => 'replied']);
+        Flash::set('success', 'Reply sent or recorded in the local email log, and the enquiry was marked replied.');
+        $this->redirect('admin/enquiries?view=' . $id);
     }
 
     public function audit(): void

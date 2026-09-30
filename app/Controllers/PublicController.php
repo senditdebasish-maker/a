@@ -15,7 +15,7 @@ final class PublicController extends Controller
     public function home(): void
     {
         $db = Database::get();
-        $notices = $db->all("SELECT * FROM notices WHERE status = 'published' AND (expires_at IS NULL OR expires_at >= :today) ORDER BY is_pinned DESC, published_at DESC LIMIT 3", ['today' => date('Y-m-d')]);
+        $notices = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status = 'published' AND audience = 'public' AND (expires_at IS NULL OR expires_at >= :today) ORDER BY is_pinned DESC, published_at DESC LIMIT 3", ['today' => date('Y-m-d')]));
         $program = $db->fetch("SELECT * FROM programs WHERE status = 'active' ORDER BY id LIMIT 1");
         $this->view('public/home', compact('notices', 'program') + ['title' => 'Learn the science. Lead the change.']);
     }
@@ -65,31 +65,53 @@ final class PublicController extends Controller
 
     public function facilities(): void
     {
-        $facilities = Database::get()->all("SELECT * FROM facilities WHERE status = 'published' ORDER BY sort_order, name");
+        $facilities = $this->localizeMany('facility', Database::get()->all("SELECT * FROM facilities WHERE status = 'published' ORDER BY sort_order, name"));
         $this->view('public/facilities', ['facilities' => $facilities, 'title' => 'Learning spaces']);
     }
 
     public function faculty(): void
     {
-        $faculty = Database::get()->all("SELECT f.*, d.name AS department_name FROM faculty f LEFT JOIN departments d ON d.id = f.department_id WHERE f.status = 'active' ORDER BY f.sort_order, f.name");
+        $faculty = $this->localizeMany('faculty', Database::get()->all("SELECT f.*, d.name AS department_name FROM faculty f LEFT JOIN departments d ON d.id = f.department_id WHERE f.status = 'active' ORDER BY f.sort_order, f.name"));
         $this->view('public/faculty', ['faculty' => $faculty, 'title' => 'Meet our faculty']);
     }
 
     public function notices(): void
     {
-        $notices = Database::get()->all("SELECT * FROM notices WHERE status = 'published' ORDER BY is_pinned DESC, published_at DESC LIMIT 50");
-        $this->view('public/notices', ['notices' => $notices, 'title' => 'Notices & announcements']);
+        $db = Database::get();
+        $categories = array_column($db->all("SELECT DISTINCT category FROM notices WHERE status = 'published' AND audience = 'public' ORDER BY category"), 'category');
+        $category = trim((string) ($_GET['category'] ?? ''));
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $where = "status = 'published' AND audience = 'public' AND (expires_at IS NULL OR expires_at >= :today)";
+        $params = ['today' => date('Y-m-d')];
+        if ($category !== '' && in_array($category, $categories, true)) { $where .= ' AND category = :category'; $params['category'] = $category; }
+        if ($search !== '') {
+            $where .= ' AND (title LIKE :search_title OR excerpt LIKE :search_excerpt OR body LIKE :search_body)';
+            $term = '%' . $search . '%';
+            $params += ['search_title' => $term, 'search_excerpt' => $term, 'search_body' => $term];
+        }
+        $notices = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE {$where} ORDER BY is_pinned DESC, published_at DESC LIMIT 100", $params));
+        $this->view('public/notices', compact('notices', 'categories', 'category', 'search') + ['title' => 'Notices & announcements']);
+    }
+
+    public function notice(string $slug): void
+    {
+        $db = Database::get();
+        $notice = $db->fetch("SELECT * FROM notices WHERE slug = :slug AND status = 'published' AND audience = 'public' AND (expires_at IS NULL OR expires_at >= :today) LIMIT 1", ['slug' => $slug, 'today' => date('Y-m-d')]);
+        if (!$notice) { http_response_code(404); $this->view('errors/404', ['title' => 'Notice not found']); return; }
+        $notice = $this->localize('notice', $notice);
+        $related = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status = 'published' AND audience = 'public' AND id <> :id AND category = :category ORDER BY published_at DESC LIMIT 3", ['id' => $notice['id'], 'category' => $notice['category']]));
+        $this->view('public/notice', compact('notice', 'related') + ['title' => $notice['title']]);
     }
 
     public function gallery(): void
     {
-        $items = Database::get()->all("SELECT * FROM gallery_items WHERE status = 'published' ORDER BY sort_order, created_at DESC");
+        $items = $this->localizeMany('gallery_item', Database::get()->all("SELECT * FROM gallery_items WHERE status = 'published' ORDER BY sort_order, created_at DESC"));
         $this->view('public/gallery', ['items' => $items, 'title' => 'Life at Netaji']);
     }
 
     public function faq(): void
     {
-        $faqs = Database::get()->all("SELECT * FROM faqs WHERE status = 'published' ORDER BY category, sort_order");
+        $faqs = $this->localizeMany('faq', Database::get()->all("SELECT * FROM faqs WHERE status = 'published' ORDER BY category, sort_order"));
         $this->view('public/faq', ['faqs' => $faqs, 'title' => 'Frequently asked questions']);
     }
 
@@ -100,6 +122,9 @@ final class PublicController extends Controller
 
     public function submitContact(): never
     {
+        $ip = mb_substr($_SERVER['REMOTE_ADDR'] ?? '', 0, 45);
+        $recent = (int) Database::get()->scalar('SELECT COUNT(*) FROM contact_submissions WHERE ip_address = :ip AND created_at >= :since', ['ip' => $ip, 'since' => date('Y-m-d H:i:s', time() - 3600)]);
+        if ($recent >= 5) { Flash::set('warning', 'Too many enquiries were submitted from this connection. Please try again later.'); $this->redirect('contact'); }
         $validator = new Validator();
         $errors = $validator->validate($_POST, [
             'name' => 'required|max:120', 'email' => 'required|email|max:190', 'phone' => 'max:20',
@@ -114,7 +139,7 @@ final class PublicController extends Controller
             'name' => trim((string) $_POST['name']), 'email' => mb_strtolower(trim((string) $_POST['email'])),
             'phone' => trim((string) ($_POST['phone'] ?? '')), 'subject' => trim((string) $_POST['subject']),
             'message' => trim((string) $_POST['message']), 'status' => 'new',
-            'ip_address' => mb_substr($_SERVER['REMOTE_ADDR'] ?? '', 0, 45), 'created_at' => date('Y-m-d H:i:s'),
+            'ip_address' => $ip, 'created_at' => date('Y-m-d H:i:s'),
         ]);
         Flash::set('success', 'Thank you. Our admissions team will respond shortly.');
         $this->redirect('contact');
@@ -126,6 +151,11 @@ final class PublicController extends Controller
         $target = $_SERVER['HTTP_REFERER'] ?? url();
         header('Location: ' . $target);
         exit;
+    }
+
+    private function localizeMany(string $type, array $records): array
+    {
+        return array_map(fn (array $record): array => $this->localize($type, $record), $records);
     }
 
     private function localize(string $type, array $record): array

@@ -41,7 +41,8 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Create an encrypted backup and download it to separate protected storage.
 - [ ] Keep the matching `APP_KEY` in a secrets vault separate from the archive.
 - [ ] Test restoration on an isolated server; record recovery time and responsible staff. The guarded CLI is `php scripts/restore-backup.php /path/to/archive.zip.enc --confirm=RESTORE`.
-- [ ] Configure a schedule outside the web request for larger production datasets.
+- [ ] Set `BACKUP_RETENTION_DAYS` and schedule `php scripts/scheduled-backup.php` outside the web request. On Windows/XAMPP, use Task Scheduler with `C:\\xampp\\php\\php.exe C:\\xampp\\htdocs\\netaji-hub\\scripts\\scheduled-backup.php`; on Linux, use cron. The command uses a non-blocking lock, returns a non-zero failure code, and prunes only completed archives older than the configured period.
+- [ ] Copy each current encrypted archive to separate protected storage and monitor task exit codes/logs; local retention is not an off-site backup.
 - [ ] Define retention and secure deletion for backups and applicant records.
 
 ## Workflow acceptance tests

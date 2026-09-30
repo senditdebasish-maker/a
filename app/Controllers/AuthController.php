@@ -93,7 +93,8 @@ final class AuthController extends Controller
 
     public function storeRegistration(): never
     {
-        $openCycle = Database::get()->fetch("SELECT id FROM admission_cycles WHERE status = 'open' AND starts_at <= :now AND ends_at >= :now ORDER BY starts_at DESC LIMIT 1", ['now' => date('Y-m-d H:i:s')]);
+        $now = date('Y-m-d H:i:s');
+        $openCycle = Database::get()->fetch("SELECT id FROM admission_cycles WHERE status = 'open' AND starts_at <= :starts_now AND ends_at >= :ends_now ORDER BY starts_at DESC LIMIT 1", ['starts_now' => $now, 'ends_now' => $now]);
         if (!$openCycle) {
             Flash::set('warning', 'Public registration is not open. Please review the published admission dates or contact the college.');
             $this->redirect('register');

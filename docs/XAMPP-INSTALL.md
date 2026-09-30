@@ -55,6 +55,16 @@ The installer uses `MAIL_DRIVER=log` and `REQUIRE_STAFF_MFA=false` to prevent a 
 3. Change `REQUIRE_STAFF_MFA=true`.
 4. Use HTTPS and change `SESSION_SECURE=true`.
 
+## Scheduled encrypted backups
+
+Set `BACKUP_RETENTION_DAYS` in `.env` (30 by default), then create a Windows Task Scheduler task that runs under a restricted service account:
+
+```powershell
+C:\xampp\php\php.exe C:\xampp\htdocs\netaji-hub\scripts\scheduled-backup.php
+```
+
+Use the project folder as the task's **Start in** directory, run it daily during a low-traffic window, capture non-zero exit codes, and copy successful `.zip.enc` files from `storage/backups/` to protected off-site storage. The command prevents concurrent runs and applies local retention. Test `scripts/restore-backup.php` with the original `APP_KEY` on an isolated installation.
+
 ## Static previews
 
 When PHP is unavailable, `public/preview.html`, `student-preview.html`, and `admin-preview.html` show the visual prototype only. The working PHP application uses `public/index.php`.

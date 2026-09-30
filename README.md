@@ -14,7 +14,7 @@ If you are viewing the Arena live preview:
 
 These three files contain mock preview data only. The working PHP app starts at `public/index.php` after installation.
 
-## Implemented Release 1 foundation
+## Implemented Release 1
 
 - Responsive pharmacy/science-themed public website with original generated imagery.
 - Public programme, admissions, facilities, faculty, notices, gallery, FAQ, contact, privacy and terms pages.
@@ -24,14 +24,16 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Personal, address, guardian, Class 10/12, entrance exam, programme preference, declaration and secure document workflows.
 - Draft, submission, assignment, review, correction, decision, fee verification and admission state history.
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.
-- Applicant dashboard, document status, manual payment proof, receipts, notifications and helpdesk tickets.
-- Admin dashboard, filtered application queue, document/payment decisions, staff notes, reporting, CSV export, users overview, settings, audit and mail log.
-- Printable/Dompdf-ready application summary, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
+- Applicant dashboard, document status, configured-fee payment proof, receipts, notifications and threaded helpdesk tickets.
+- Admin dashboard, filtered application queue, automated eligibility flags with manual final decisions, document/payment decisions, staff notes, reporting, CSV export, users overview, settings, audit and mail log.
+- CMS CRUD for notices, faculty, facilities, FAQs and gallery images, with manually maintained Bengali/Hindi translations and English fallback.
+- Public notice filtering/detail pages and a staff processing inbox for public contact enquiries.
+- Printable/Dompdf-ready application summary, cover sheet, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
 - Protected local storage, MIME/size checks, random paths, SHA-256 file checksums and permission-checked streaming.
 - Configurable Aadhaar stage, AES-256-GCM field encryption, masking, consent/audit/retention foundation.
 - Browser installer that creates a clean database, roles, permissions, B.Pharm, draft 2027–28 cycle, CMS content and optional demonstration records.
-- Admin-triggered authenticated encrypted backup archive containing SQL + protected files.
-- Production preflight script and launch checklists.
+- Admin-triggered and lock-protected scheduled encrypted backup archives containing SQL + protected files, with configurable retention.
+- Production preflight, guarded restore and scheduled-backup commands plus launch checklists.
 
 ## Stack
 
@@ -84,6 +86,8 @@ resources/lang/           EN/BN/HI interface dictionaries
 resources/views/          Public site, portals, documents and errors
 routes/web.php             GET/POST routes and permission middleware
 scripts/preflight.php     Production configuration check
+scripts/scheduled-backup.php  Locked CLI backup and retention command
+scripts/restore-backup.php    Guarded encrypted-backup restoration
 storage/                  Private uploads, logs, sessions and encrypted backups
 docs/                     Architecture, XAMPP, privacy and launch guidance
 ```
@@ -98,7 +102,7 @@ This repository is a substantial Release 1 implementation, but **no generic soft
 4. Run `php scripts/preflight.php`.
 5. Perform security review, accessibility QA, browser/device QA, performance/load tests and a full user-acceptance test with Admissions, Accounts and management.
 
-The admin pages for programme/cycle rules, role editing, advanced CMS modules, scheduled backups and academic/finance/campus Phase 2 modules are intentionally structured for continued development; do not treat placeholder module buttons as finished workflows.
+Release 1 admissions and website/CMS workflows are implemented. The sidebar items explicitly labelled **Phase 2** (full academic operations and fee-ledger management) are out of Release 1 scope and remain disabled rather than posing as working modules.
 
 ## Documentation
 

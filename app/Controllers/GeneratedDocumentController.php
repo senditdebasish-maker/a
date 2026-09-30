@@ -15,6 +15,7 @@ final class GeneratedDocumentController extends Controller
 {
     private const LABELS = [
         'application' => 'Application Summary',
+        'cover-sheet' => 'Application Cover Sheet',
         'acknowledgement' => 'Submission Acknowledgement',
         'correction-memo' => 'Correction Memo',
         'offer-letter' => 'Provisional Offer Letter',
@@ -72,6 +73,7 @@ final class GeneratedDocumentController extends Controller
             'status' => $kind === 'correction-memo' ? 'correction_required' : ($kind === 'offer-letter' ? 'selected' : ($kind === 'admission-letter' ? 'admitted' : 'submitted')),
         ]);
         $number = match ($kind) {
+            'cover-sheet' => 'COV-' . ($application['application_number'] ?: 'DRAFT-' . $application['id']),
             'acknowledgement' => 'ACK-' . $application['application_number'],
             'correction-memo' => 'COR-' . $application['application_number'],
             'offer-letter' => 'OFF-' . $application['application_number'],
@@ -82,6 +84,7 @@ final class GeneratedDocumentController extends Controller
             'kind' => $kind, 'label' => self::LABELS[$kind], 'number' => $number,
             'title' => match ($kind) {
                 'application' => 'Applicant record summary',
+                'cover-sheet' => 'Application document cover sheet',
                 'acknowledgement' => 'Your application has been received',
                 'correction-memo' => 'Action is required on your application',
                 'offer-letter' => 'Provisional admission offer',
@@ -89,6 +92,7 @@ final class GeneratedDocumentController extends Controller
             },
             'message' => match ($kind) {
                 'application' => 'This summary presents key information from the online application and remains subject to document verification.',
+                'cover-sheet' => 'Place this cover sheet first when the Admissions Office asks for a printed or original-document set.',
                 'acknowledgement' => 'The Admissions Office acknowledges receipt of your online application for the admission cycle shown below.',
                 'correction-memo' => $statusEvent['remarks'] ?? 'Please review the correction request in your applicant dashboard.',
                 'offer-letter' => 'You have been provisionally selected, subject to fee payment, original-document verification and the institution’s final rules.',
@@ -123,7 +127,7 @@ final class GeneratedDocumentController extends Controller
     private function isAvailable(array $application, string $kind): bool
     {
         return match ($kind) {
-            'application' => true,
+            'application', 'cover-sheet' => true,
             'acknowledgement' => $application['submitted_at'] !== null,
             'correction-memo' => $application['status'] === 'correction_required',
             'offer-letter' => in_array($application['status'], ['selected','fee_verified','admitted'], true),
