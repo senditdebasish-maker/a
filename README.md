@@ -2,7 +2,7 @@
 
 A no-Node.js, XAMPP-ready PHP/MySQL foundation for a configurable pharmacy-college website, online admissions, applicant/student portal, administration dashboard, multilingual CMS and future college ERP modules.
 
-**Developer handover:** Read [docs/DEVELOPER-HANDBOOK.md](docs/DEVELOPER-HANDBOOK.md) for the complete technical architecture, request lifecycle, database map, security model, workflows, extension rules, testing strategy, known boundaries and approved Phase 2 scope.
+**Developer handover:** Read [docs/DEVELOPER-HANDBOOK.md](docs/DEVELOPER-HANDBOOK.md) for the architecture and [docs/ADMISSIONS-ACCEPTANCE-REPORT.md](docs/ADMISSIONS-ACCEPTANCE-REPORT.md) for the admission-module inventory, routes, schema, controls, tests, migration and rollback guidance.
 
 > **Netaji College of Pharmacy is an editable demonstration identity in this repository.** Seeded content does not claim real affiliation, recognition, PCI/AICTE approval, sanctioned intake, faculty employment, or current admission rules.
 
@@ -22,7 +22,8 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Public programme, admissions, facilities, faculty, notices, gallery, FAQ, contact, privacy and terms pages.
 - English/Bengali/Hindi interface dictionary foundation and CMS translation records with English fallback.
 - Email-verification registration, password recovery, login throttling and optional staff email OTP.
-- One application per cycle with ranked programme choices.
+- Dedicated database-driven Admissions workspace for cycle lifecycle, publication readiness, programme catalogue/assignment, seat matrices, eligibility, dynamic forms, documents, fees, preview, versioning and safe duplication.
+- One application per cycle with multiple-cycle history and ranked programme choices.
 - Personal, address, guardian, Class 10/12, entrance exam, programme preference, declaration and secure document workflows.
 - Draft, submission, assignment, review, correction, decision, fee verification and admission state history.
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.
@@ -33,7 +34,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Printable/Dompdf-ready application summary, cover sheet, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
 - Protected local storage, MIME/size checks, random paths, SHA-256 file checksums and permission-checked streaming.
 - Configurable Aadhaar stage, AES-256-GCM field encryption, masking, consent/audit/retention foundation.
-- Browser installer that creates a clean database, roles, permissions, B.Pharm, draft 2027–28 cycle, CMS content and optional demonstration records.
+- Browser installer that creates a clean database, roles, permissions, B.Pharm, a versioned scheduled 2027–28 admission cycle, CMS content and optional demonstration records.
 - Admin-triggered and lock-protected scheduled encrypted backup archives containing SQL + protected files, with configurable retention.
 - Production preflight, guarded restore and scheduled-backup commands plus launch checklists.
 
@@ -70,6 +71,7 @@ Only when **Add demonstration data** is checked during installation:
 |---|---|---|
 | Admission Officer | `admissions@demo.test` | `DemoOfficer#2027` |
 | Accounts Officer | `accounts@demo.test` | `DemoAccounts#2027` |
+| Assigned Reviewer | `reviewer@demo.test` | `DemoReviewer#2027` |
 | Applicant | `ishita@demo.test` | `StudentDemo#2027` |
 
 Never enable demonstration data on a real installation. The Super Admin credentials are created by the installer and are not hard-coded.
@@ -108,7 +110,8 @@ Release 1 admissions and website/CMS workflows are implemented. The sidebar item
 
 ## Documentation
 
-- [Complete developer handbook and Phase 2 handover](docs/DEVELOPER-HANDBOOK.md)
+- [Complete developer handbook](docs/DEVELOPER-HANDBOOK.md)
+- [Admissions acceptance and operations report](docs/ADMISSIONS-ACCEPTANCE-REPORT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [XAMPP installation](docs/XAMPP-INSTALL.md)
 - [Production checklist](docs/PRODUCTION-CHECKLIST.md)

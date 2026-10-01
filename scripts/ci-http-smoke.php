@@ -57,6 +57,13 @@ final class BrowserSession
         echo "PASS GET {$path}\n";
     }
 
+    public function expectStatus(string $path,int $expected): void
+    {
+        $response=$this->request('GET',$path);
+        if($response['status']!==$expected)throw new RuntimeException("GET {$path} returned {$response['status']}; expected {$expected}");
+        echo "PASS GET {$path} status {$expected}\n";
+    }
+
     public function login(string $email, string $password, string $landingNeedle): void
     {
         $page = $this->request('GET', '/login');
@@ -108,4 +115,10 @@ foreach ([
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
 
-echo "Public, applicant, staff, CMS and PDF HTTP smoke tests passed.\n";
+$reviewer=new BrowserSession($base);
+$reviewer->login('reviewer@demo.test','DemoReviewer#2027','Administration');
+$reviewer->get('/admin/applications/2','Candidate profile');
+$reviewer->expectStatus('/admin/applications/1',403);
+$reviewer->expectStatus('/admin/applications/1/generated/application',403);
+
+echo "Public, applicant, staff, reviewer IDOR, CMS and PDF HTTP smoke tests passed.\n";

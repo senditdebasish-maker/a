@@ -222,9 +222,9 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes a rollback/forward-fix document; see `database/migrations/002_admission_management.rollback.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes a rollback/forward-fix document; see `database/migrations/002_admission_management.rollback.md` and `database/migrations/003_submission_snapshot_revisions.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
-## 8. Current database map (63 tables)
+## 8. Current database map (64 tables)
 
 ### Identity, access and configuration
 
@@ -267,7 +267,8 @@ These are shared masters. Admission-module work must reuse them rather than crea
 - `application_documents`, `application_document_versions`
 - `application_status_history`
 - `application_field_responses`
-- `application_submission_snapshots`
+- `application_submission_snapshots` — compatibility/current submitted state.
+- `application_submission_snapshot_revisions` — immutable initial and correction-resubmission evidence.
 - `application_corrections`, `application_correction_items`
 - `staff_notes`
 - `application_declarations`
