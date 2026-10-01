@@ -59,11 +59,13 @@ final class ApplicationWorkflowService
                 $updates['selected_cycle_program_id']=$programId;
             }
             if (in_array($to,['rejected','withdrawn'],true)) (new SeatAllocationService())->release($db,$applicationId,$actorId,$remarks);
+            if($to==='fee_verified'){$assessment=$db->fetch("SELECT * FROM application_fee_assessments WHERE application_id=:application AND fee_type='admission_fee' FOR UPDATE",['application'=>$applicationId]);if(!$assessment||((float)$assessment['total_amount']>0&&!in_array($assessment['status'],['paid','waived'],true)))throw new RuntimeException('Admission fee must be verified or formally waived before fee verification.');}
             if ($to==='admitted') {
                 $programId=(int)($application['selected_cycle_program_id']??0);
                 if ($programId<1) throw new RuntimeException('Select and allocate a programme before admission.');
                 $assessment=$db->fetch("SELECT * FROM application_fee_assessments WHERE application_id=:application AND fee_type='admission_fee' FOR UPDATE",['application'=>$applicationId]);
-                if ($assessment&&(float)$assessment['total_amount']>0&&!in_array($assessment['status'],['paid','waived'],true)) throw new RuntimeException('Admission fee must be paid or formally waived before admission.');
+                if(!$assessment){$allocation=$db->fetch('SELECT category FROM seat_allocations WHERE application_id=:application AND is_active=1 FOR UPDATE',['application'=>$applicationId]);$assessment=(new AdmissionFeeService())->assess($db,$applicationId,$programId,'admission_fee',(string)($allocation['category']??''),$application['configuration_version_id']?(int)$application['configuration_version_id']:null);}
+                if ((float)$assessment['total_amount']>0&&!in_array($assessment['status'],['paid','waived'],true)) throw new RuntimeException('Admission fee must be paid or formally waived before admission.');
                 (new SeatAllocationService())->confirm($db,$applicationId);
                 $updates['admitted_at']=date('Y-m-d H:i:s');
                 if (!$db->fetch('SELECT id FROM student_enrollments WHERE application_id=:application',['application'=>$applicationId])) {
