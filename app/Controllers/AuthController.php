@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Validator;
+use App\Services\AdmissionCycleService;
 use App\Services\AuditService;
 use App\Services\MailService;
 
@@ -54,6 +55,9 @@ final class AuthController extends Controller
         }
 
         AuditService::log('login', 'user', $user['id']);
+        if (Auth::hasRole('applicant')&&!empty($_SESSION['intended_cycle_slug'])) {
+            $this->redirect('admissions/'.rawurlencode((string)$_SESSION['intended_cycle_slug']).'/apply');
+        }
         $this->redirect(Auth::hasRole('applicant') ? 'student/dashboard' : 'admin/dashboard');
     }
 
@@ -113,18 +117,26 @@ final class AuthController extends Controller
 
     public function register(): void
     {
-        $cycle = Database::get()->fetch("SELECT * FROM admission_cycles WHERE status = 'open' ORDER BY starts_at DESC LIMIT 1");
-        $this->view('auth/register', ['cycle' => $cycle, 'title' => 'Create applicant account'], 'auth');
+        $service=new AdmissionCycleService();
+        $slug=trim((string)($_GET['cycle']??$_SESSION['intended_cycle_slug']??''));
+        $program=trim((string)($_GET['program']??$_SESSION['intended_program_slug']??''));
+        $cycle=$slug!==''?$service->publicCycle($slug):($service->publicCycles(false)[0]??null);
+        if ($cycle&&!$service->acceptsApplications($cycle)) $cycle=null;
+        if ($cycle) { $_SESSION['intended_cycle_slug']=$cycle['slug']; if ($program!=='') $_SESSION['intended_program_slug']=$program; }
+        $this->view('auth/register', ['cycle'=>$cycle,'program'=>$program,'title'=>'Create applicant account'], 'auth');
     }
 
     public function storeRegistration(): never
     {
-        $now = date('Y-m-d H:i:s');
-        $openCycle = Database::get()->fetch("SELECT id FROM admission_cycles WHERE status = 'open' AND starts_at <= :starts_now AND ends_at >= :ends_now ORDER BY starts_at DESC LIMIT 1", ['starts_now' => $now, 'ends_now' => $now]);
-        if (!$openCycle) {
-            Flash::set('warning', 'Public registration is not open. Please review the published admission dates or contact the college.');
-            $this->redirect('register');
+        $service=new AdmissionCycleService();
+        $slug=trim((string)($_POST['cycle_slug']??$_SESSION['intended_cycle_slug']??''));
+        $openCycle=$slug!==''?$service->publicCycle($slug):($service->publicCycles(false)[0]??null);
+        if (!$openCycle||!$service->acceptsApplications($openCycle)) {
+            Flash::set('warning', 'Public registration is not open for the selected cycle. Please review the published admission dates or contact the college.');
+            $this->redirect('register'.($slug!==''?'?cycle='.rawurlencode($slug):''));
         }
+        $_SESSION['intended_cycle_slug']=$openCycle['slug'];
+        if (!empty($_POST['program_slug'])) $_SESSION['intended_program_slug']=trim((string)$_POST['program_slug']);
         $validator = new Validator();
         $errors = $validator->validate($_POST, [
             'first_name' => 'required|max:80', 'last_name' => 'required|max:80', 'email' => 'required|email|max:190',

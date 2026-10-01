@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Translator;
 use App\Core\Validator;
+use App\Services\AdmissionCycleService;
 
 final class PublicController extends Controller
 {
@@ -17,7 +18,8 @@ final class PublicController extends Controller
         $db = Database::get();
         $notices = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status = 'published' AND audience = 'public' AND (expires_at IS NULL OR expires_at >= :today) ORDER BY is_pinned DESC, published_at DESC LIMIT 3", ['today' => date('Y-m-d')]));
         $program = $db->fetch("SELECT * FROM programs WHERE status = 'active' ORDER BY id LIMIT 1");
-        $this->view('public/home', compact('notices', 'program') + ['title' => 'Learn the science. Lead the change.']);
+        $admissionCycles = (new AdmissionCycleService())->publicCycles(true);
+        $this->view('public/home', compact('notices', 'program', 'admissionCycles') + ['title' => 'Learn the science. Lead the change.']);
     }
 
     public function page(string $slug): void
@@ -46,21 +48,47 @@ final class PublicController extends Controller
             $this->view('errors/404', ['title' => 'Programme not found']);
             return;
         }
-        $cycle = Database::get()->fetch("SELECT ac.*, cp.seat_capacity, cp.application_fee, cp.minimum_marks_general, cp.minimum_marks_reserved
-            FROM cycle_programs cp JOIN admission_cycles ac ON ac.id = cp.admission_cycle_id
-            WHERE cp.program_id = :program AND ac.status IN ('draft','open') ORDER BY ac.starts_at DESC LIMIT 1", ['program' => $program['id']]);
+        $cycle = null;
+        foreach ((new AdmissionCycleService())->publicCycles(true) as $candidate) {
+            $configured = Database::get()->fetch('SELECT seat_capacity,application_fee,minimum_marks_general,minimum_marks_reserved FROM cycle_programs WHERE admission_cycle_id=:cycle AND program_id=:program AND status=:status',['cycle'=>$candidate['id'],'program'=>$program['id'],'status'=>'active']);
+            if ($configured) { $cycle=$candidate+$configured; break; }
+        }
         $this->view('public/program', ['program' => $program, 'cycle' => $cycle, 'title' => $program['name']]);
     }
 
     public function admissions(): void
     {
-        $db = Database::get();
-        $cycle = $db->fetch("SELECT * FROM admission_cycles WHERE status IN ('draft','open') ORDER BY starts_at DESC LIMIT 1");
-        $requirements = [];
-        if ($cycle) {
-            $requirements = $db->all("SELECT dt.name, cdr.is_required, cdr.stage FROM cycle_document_requirements cdr JOIN document_types dt ON dt.id = cdr.document_type_id WHERE cdr.admission_cycle_id = :id ORDER BY cdr.sort_order", ['id' => $cycle['id']]);
-        }
-        $this->view('public/admissions', ['cycle' => $cycle, 'requirements' => $requirements, 'title' => 'Admissions 2027–28']);
+        $cycles=(new AdmissionCycleService())->publicCycles(true);
+        $this->view('public/admissions',['cycles'=>$cycles,'title'=>'Admissions']);
+    }
+
+    public function admission(string $slug): void
+    {
+        $service=new AdmissionCycleService();
+        $cycle=$service->publicCycle($slug);
+        if (!$cycle) { http_response_code(404); $this->view('errors/404',['title'=>'Admission cycle not found']); return; }
+        $db=Database::get();
+        $programs=$db->all("SELECT cp.*,p.name,p.code,p.slug AS program_slug,p.summary,p.duration_years,p.award_type,
+            (SELECT COALESCE(SUM(sm.seats-sm.filled_seats),0) FROM seat_matrix sm WHERE sm.cycle_program_id=cp.id) AS available_seats
+            FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id WHERE cp.admission_cycle_id=:cycle AND cp.status='active' AND p.status='active' ORDER BY p.sort_order,p.name",['cycle'=>$cycle['id']]);
+        $requirements=$db->all("SELECT dt.name,dt.description,dt.allowed_mimes,dt.max_size_mb,cdr.is_required,cdr.stage,p.name AS program_name,cdr.category
+            FROM cycle_document_requirements cdr JOIN document_types dt ON dt.id=cdr.document_type_id LEFT JOIN programs p ON p.id=cdr.program_id
+            WHERE cdr.admission_cycle_id=:cycle ORDER BY cdr.sort_order,dt.name",['cycle'=>$cycle['id']]);
+        $this->view('public/admission-detail',compact('cycle','programs','requirements')+['title'=>$cycle['name']]);
+    }
+
+    public function admissionProspectus(string $slug): never
+    {
+        $cycle=(new AdmissionCycleService())->publicCycle($slug);
+        if (!$cycle||!$cycle['prospectus_path']) { http_response_code(404); exit('Prospectus not found.'); }
+        $base=realpath(BASE_PATH.'/storage/private');
+        $path=realpath(BASE_PATH.'/storage/private/'.ltrim((string)$cycle['prospectus_path'],'/'));
+        if (!$base||!$path||!str_starts_with($path,$base.DIRECTORY_SEPARATOR)||!is_file($path)) { http_response_code(404); exit('Prospectus not found.'); }
+        header('Content-Type: '.($cycle['prospectus_mime_type']?:'application/pdf'));
+        header('Content-Length: '.filesize($path));
+        header('Content-Disposition: inline; filename="'.str_replace(['"',"\r","\n"],'',basename((string)($cycle['prospectus_original_name']?:'prospectus.pdf'))).'"');
+        header('X-Content-Type-Options: nosniff');
+        readfile($path); exit;
     }
 
     public function facilities(): void

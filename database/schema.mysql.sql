@@ -877,6 +877,23 @@ CREATE TABLE application_submission_snapshots (
     INDEX idx_submission_snapshots_hash (snapshot_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE application_submission_snapshot_revisions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    application_id BIGINT UNSIGNED NOT NULL,
+    configuration_version_id BIGINT UNSIGNED NOT NULL,
+    revision_no INT UNSIGNED NOT NULL,
+    event_type VARCHAR(40) NOT NULL,
+    snapshot_json LONGTEXT NOT NULL,
+    snapshot_hash CHAR(64) NOT NULL,
+    created_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uq_application_snapshot_revision (application_id, revision_no),
+    INDEX idx_snapshot_revision_hash (snapshot_hash),
+    CONSTRAINT fk_snapshot_revisions_application FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    CONSTRAINT fk_snapshot_revisions_configuration FOREIGN KEY (configuration_version_id) REFERENCES admission_configuration_versions(id),
+    CONSTRAINT fk_snapshot_revisions_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE application_corrections (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     application_id BIGINT UNSIGNED NOT NULL,
@@ -1046,4 +1063,5 @@ ALTER TABLE payments
 
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('001_initial_schema', 'Initial clean-install schema', NULL, 1, NULL, NOW());
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('002_admission_management', 'Admission management schema included by clean installer', NULL, 1, NULL, NOW());
+INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('003_submission_snapshot_revisions', 'Immutable submission revision schema included by clean installer', NULL, 1, NULL, NOW());
 SET FOREIGN_KEY_CHECKS = 1;

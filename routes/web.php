@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Controllers\Admin\AdmissionController;
 use App\Controllers\Admin\ApplicationController as AdminApplicationController;
 use App\Controllers\Admin\CmsController;
 use App\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -22,6 +23,8 @@ $router->get('/about', fn () => (new PublicController())->page('about'));
 $router->get('/programs', [PublicController::class, 'programs']);
 $router->get('/programs/{slug}', [PublicController::class, 'program']);
 $router->get('/admissions', [PublicController::class, 'admissions']);
+$router->get('/admissions/{slug}', [PublicController::class, 'admission']);
+$router->get('/admissions/{slug}/prospectus', [PublicController::class, 'admissionProspectus']);
 $router->get('/facilities', [PublicController::class, 'facilities']);
 $router->get('/faculty', [PublicController::class, 'faculty']);
 $router->get('/notices', [PublicController::class, 'notices']);
@@ -52,6 +55,7 @@ $router->post('/logout', [AuthController::class, 'logout'], ['auth']);
 // Applicant and admitted-student portal
 $student = ['auth', 'role:applicant'];
 $router->get('/student/dashboard', [ApplicantController::class, 'dashboard'], $student);
+$router->get('/admissions/{slug}/apply', [ApplicantController::class, 'startApplication'], $student);
 $router->get('/student/application', [ApplicantController::class, 'application'], $student);
 $router->post('/student/application/save', [ApplicantController::class, 'saveApplication'], $student);
 $router->post('/student/application/identity', [ApplicantController::class, 'saveIdentity'], $student);
@@ -70,16 +74,37 @@ $router->get('/student/receipts/{id}', [GeneratedDocumentController::class, 'rec
 
 // Protected file delivery
 $router->get('/files/document/{id}', [FileController::class, 'document'], ['auth']);
+$router->get('/files/document-version/{id}', [FileController::class, 'documentVersion'], ['auth']);
 $router->get('/files/payment/{id}', [FileController::class, 'payment'], ['auth']);
 
 // Staff administration
 $router->get('/admin/dashboard', [AdminDashboardController::class, 'index'], ['auth', 'permission:dashboard.view']);
+$router->get('/admin/admissions', [AdmissionController::class, 'index'], ['auth', 'permission:admissions.view']);
+$router->get('/admin/admissions/create', [AdmissionController::class, 'create'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/programs', [AdmissionController::class, 'createProgram'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions', [AdmissionController::class, 'store'], ['auth', 'permission:admissions.manage']);
+$router->get('/admin/admissions/{id}', [AdmissionController::class, 'show'], ['auth', 'permission:admissions.view']);
+$router->get('/admin/admissions/{id}/preview', [AdmissionController::class, 'preview'], ['auth', 'permission:admissions.view']);
+$router->post('/admin/admissions/{id}', [AdmissionController::class, 'update'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/{id}/publish', [AdmissionController::class, 'publish'], ['auth', 'permission:admissions.publish']);
+$router->post('/admin/admissions/{id}/close', [AdmissionController::class, 'close'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/{id}/archive', [AdmissionController::class, 'archive'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/{id}/duplicate', [AdmissionController::class, 'duplicate'], ['auth', 'permission:admissions.duplicate']);
+$router->post('/admin/admissions/{id}/programs', [AdmissionController::class, 'addProgram'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/{id}/programs/{programId}/seats', [AdmissionController::class, 'saveSeats'], ['auth', 'permission:admission_seats.manage']);
+$router->post('/admin/admissions/{id}/programs/{programId}/eligibility', [AdmissionController::class, 'saveEligibility'], ['auth', 'permission:admissions.manage']);
+$router->post('/admin/admissions/{id}/programs/{programId}/fees', [AdmissionController::class, 'saveFee'], ['auth', 'permission:admission_fees.manage']);
+$router->post('/admin/admissions/{id}/form-sections', [AdmissionController::class, 'saveSection'], ['auth', 'permission:admission_forms.manage']);
+$router->post('/admin/admissions/{id}/form-fields', [AdmissionController::class, 'saveField'], ['auth', 'permission:admission_forms.manage']);
+$router->post('/admin/admissions/{id}/documents', [AdmissionController::class, 'saveDocument'], ['auth', 'permission:admission_documents.manage']);
 $router->get('/admin/applications', [AdminApplicationController::class, 'index'], ['auth', 'permission:applications.view']);
 $router->get('/admin/applications/export', [AdminApplicationController::class, 'export'], ['auth', 'permission:reports.export']);
 $router->get('/admin/applications/{id}', [AdminApplicationController::class, 'show'], ['auth', 'permission:applications.view']);
 $router->get('/admin/applications/{id}/generated/{kind}', [GeneratedDocumentController::class, 'admin'], ['auth', 'permission:applications.view']);
+$router->get('/admin/payments/{id}/receipt', [GeneratedDocumentController::class, 'receipt'], ['auth', 'permission:payments.view']);
 $router->post('/admin/applications/{id}/eligibility', [AdminApplicationController::class, 'evaluateEligibility'], ['auth', 'permission:applications.review']);
 $router->post('/admin/applications/{id}/status', [AdminApplicationController::class, 'status'], ['auth', 'permission:applications.decide']);
+$router->post('/admin/applications/{id}/corrections', [AdminApplicationController::class, 'requestCorrection'], ['auth', 'permission:applications.correct']);
 $router->post('/admin/applications/{id}/assign', [AdminApplicationController::class, 'assign'], ['auth', 'permission:applications.assign']);
 $router->post('/admin/applications/{id}/notes', [AdminApplicationController::class, 'note'], ['auth', 'permission:applications.review']);
 $router->post('/admin/applications/{id}/documents/{documentId}', [AdminApplicationController::class, 'reviewDocument'], ['auth', 'permission:documents.verify']);
@@ -105,13 +130,6 @@ $router->get('/admin/roles', [SystemController::class, 'roles'], ['auth', 'permi
 $router->post('/admin/roles/{id}', [SystemController::class, 'updateRole'], ['auth', 'permission:roles.manage']);
 $router->get('/admin/settings', [SystemController::class, 'settings'], ['auth', 'permission:settings.view']);
 $router->post('/admin/settings', [SystemController::class, 'updateSettings'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/programs', [SystemController::class, 'createProgram'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/cycles', [SystemController::class, 'createCycle'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/cycles/{id}/programs', [SystemController::class, 'addCycleProgram'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/cycles/{id}', [SystemController::class, 'updateCycle'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/cycle-programs/{id}', [SystemController::class, 'updateCycleProgram'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/seats/{id}', [SystemController::class, 'updateSeat'], ['auth', 'permission:settings.edit']);
-$router->post('/admin/settings/documents/{id}', [SystemController::class, 'updateDocumentRequirement'], ['auth', 'permission:settings.edit']);
 $router->get('/admin/audit', [SystemController::class, 'audit'], ['auth', 'permission:audit.view']);
 $router->get('/admin/mail-log', [SystemController::class, 'mailLog'], ['auth', 'permission:settings.view']);
 $router->get('/admin/backups', [SystemController::class, 'backups'], ['auth', 'permission:backups.manage']);

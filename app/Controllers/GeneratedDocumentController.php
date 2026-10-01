@@ -24,7 +24,9 @@ final class GeneratedDocumentController extends Controller
 
     public function student(string $kind): void
     {
-        $application = Database::get()->fetch('SELECT id FROM applications WHERE user_id = :user ORDER BY created_at DESC LIMIT 1', ['user' => Auth::id()]);
+        $active=(int)($_GET['application_id']??$_SESSION['active_application_id']??0);
+        $application=$active>0?Database::get()->fetch('SELECT id FROM applications WHERE id=:id AND user_id=:user',['id'=>$active,'user'=>Auth::id()]):null;
+        $application ??= Database::get()->fetch('SELECT id FROM applications WHERE user_id = :user ORDER BY created_at DESC LIMIT 1', ['user' => Auth::id()]);
         if (!$application) {
             http_response_code(404); echo 'Application not found.'; return;
         }
@@ -39,9 +41,10 @@ final class GeneratedDocumentController extends Controller
     public function receipt(string $id): void
     {
         $db = Database::get();
-        $payment = $db->fetch("SELECT p.*, a.user_id AS applicant_user_id, a.application_number, CONCAT(u.first_name, ' ', u.last_name) AS applicant_name
+        $payment = $db->fetch("SELECT p.*, a.user_id AS applicant_user_id,a.assigned_to, a.application_number, CONCAT(u.first_name, ' ', u.last_name) AS applicant_name
             FROM payments p JOIN applications a ON a.id = p.application_id JOIN users u ON u.id = a.user_id WHERE p.id = :id", ['id' => (int) $id]);
-        if (!$payment || ($payment['status'] !== 'verified') || (!Auth::can('payments.view') && (int) $payment['applicant_user_id'] !== Auth::id())) {
+        $restrictedReviewer=$payment&&Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])&&(int)$payment['assigned_to']!==Auth::id();
+        if (!$payment || ($payment['status'] !== 'verified') || $restrictedReviewer || (!Auth::can('payments.view') && (int) $payment['applicant_user_id'] !== Auth::id())) {
             http_response_code(403); echo 'Receipt is not available.'; return;
         }
         $document = [
@@ -59,7 +62,8 @@ final class GeneratedDocumentController extends Controller
         $db = Database::get();
         $application = $db->fetch("SELECT a.*, ac.name AS cycle_name, CONCAT(u.first_name, ' ', u.last_name) AS applicant_name, u.email, u.mobile
             FROM applications a JOIN admission_cycles ac ON ac.id = a.admission_cycle_id JOIN users u ON u.id = a.user_id WHERE a.id = :id", ['id' => $applicationId]);
-        if (!$application || (!$admin && (int) $application['user_id'] !== Auth::id())) {
+        $restrictedReviewer=$application&&$admin&&Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])&&(int)$application['assigned_to']!==Auth::id();
+        if (!$application || $restrictedReviewer || (!$admin && (int) $application['user_id'] !== Auth::id())) {
             http_response_code(403); echo 'Access denied.'; return;
         }
         if (!$admin && !$this->isAvailable($application, $kind)) {
@@ -67,7 +71,7 @@ final class GeneratedDocumentController extends Controller
         }
         $profile = $db->fetch('SELECT * FROM applicant_profiles WHERE user_id = :user', ['user' => $application['user_id']]) ?: [];
         $profile['full_name'] = $application['applicant_name'];
-        $program = $db->fetch('SELECT p.name, p.code FROM application_preferences pref JOIN cycle_programs cp ON cp.id = pref.cycle_program_id JOIN programs p ON p.id = cp.program_id WHERE pref.application_id = :id ORDER BY pref.preference_order LIMIT 1', ['id' => $applicationId]);
+        $program = $db->fetch('SELECT p.name,p.code FROM applications a JOIN application_preferences pref ON pref.application_id=a.id JOIN cycle_programs cp ON cp.id=pref.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE a.id=:id ORDER BY CASE WHEN pref.cycle_program_id=a.selected_cycle_program_id THEN 0 ELSE 1 END,pref.preference_order LIMIT 1',['id'=>$applicationId]);
         $statusEvent = $db->fetch('SELECT * FROM application_status_history WHERE application_id = :id AND to_status = :status ORDER BY created_at DESC LIMIT 1', [
             'id' => $applicationId,
             'status' => $kind === 'correction-memo' ? 'correction_required' : ($kind === 'offer-letter' ? 'selected' : ($kind === 'admission-letter' ? 'admitted' : 'submitted')),
@@ -130,7 +134,7 @@ final class GeneratedDocumentController extends Controller
             'application', 'cover-sheet' => true,
             'acknowledgement' => $application['submitted_at'] !== null,
             'correction-memo' => $application['status'] === 'correction_required',
-            'offer-letter' => in_array($application['status'], ['selected','fee_verified','admitted'], true),
+            'offer-letter' => in_array($application['status'], ['selected','payment_pending','fee_verified','admitted'], true),
             'admission-letter' => $application['status'] === 'admitted',
             default => false,
         };

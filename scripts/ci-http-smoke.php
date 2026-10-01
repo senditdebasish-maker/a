@@ -72,6 +72,7 @@ final class BrowserSession
 $public = new BrowserSession($base);
 foreach ([
     '/' => 'Learn the science', '/programs' => 'Pharmacy programmes', '/admissions' => 'Your next step',
+    '/admissions/undergraduate-admissions-2027-28' => 'Choose and rank your preferences',
     '/facilities' => 'Spaces that invite', '/faculty' => 'Guidance shaped', '/notices' => 'Notices &',
     '/notices/admissions-cycle-2027' => 'Applications for 2027', '/gallery' => 'Learning, belonging',
     '/faq' => 'Frequently asked', '/contact' => 'Talk to us', '/login' => 'Sign in to your portal',
@@ -95,7 +96,9 @@ echo "PASS Dompdf application download\n";
 $admin = new BrowserSession($base);
 $admin->login('ci-admin@example.test', 'CI-Temporary#2027', 'Administration');
 foreach ([
-    '/admin/dashboard' => 'Admissions overview', '/admin/applications' => 'Applications',
+    '/admin/dashboard' => 'Admissions overview', '/admin/admissions' => 'Admission management',
+    '/admin/admissions/1' => 'Readiness validation', '/admin/admissions/1/preview' => 'Programme choices',
+    '/admin/applications' => 'Applications', '/admin/reports' => 'Admissions reports',
     '/admin/applications/1' => 'Candidate profile', '/admin/cms' => 'Content management',
     '/admin/cms/notices' => 'Notices records', '/admin/cms/faculty' => 'Faculty directory records',
     '/admin/cms/facilities' => 'Facilities records', '/admin/cms/faqs' => 'Frequently asked questions records',

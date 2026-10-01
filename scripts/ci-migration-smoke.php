@@ -46,16 +46,17 @@ if ($phase === 'seed') {
 
 $assert = static function (bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); };
 $tableCount=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'")->fetchColumn();
-$assert($tableCount===63,"Expected 63 tables after upgrade, got {$tableCount}");
+$assert($tableCount===64,"Expected 64 tables after upgrade, got {$tableCount}");
 $cycle=$pdo->query("SELECT status, slug, configuration_version FROM admission_cycles WHERE code='LEGACY-26'")->fetch();
 $assert($cycle['status']==='published' && $cycle['slug']==='legacy-26' && (int)$cycle['configuration_version']===1,'Legacy cycle was not normalized/versioned.');
 $app=$pdo->query("SELECT configuration_version_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
 $assert((int)$app['configuration_version_id']>0,'Legacy application configuration version missing.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_submission_snapshots')->fetchColumn()===1,'Legacy submission snapshot missing.');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM application_submission_snapshot_revisions')->fetchColumn()===1,'Legacy immutable snapshot revision missing.');
 $mail=$pdo->query("SELECT body_html, body_checksum_sha256, sensitive_redacted FROM mail_logs WHERE template_key='password_reset'")->fetch();
 $assert($mail['body_html']===null && strlen((string)$mail['body_checksum_sha256'])===64 && (int)$mail['sensitive_redacted']===1,'Sensitive historical mail was not redacted.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_document_versions')->fetchColumn()===1,'Document revision was not backfilled.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM admission_fee_rules')->fetchColumn()===2,'Fee rules were not backfilled.');
-$ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='002_admission_management'")->fetchColumn();
+$ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='003_submission_snapshot_revisions'")->fetchColumn();
 $assert(is_string($ledger)&&strlen($ledger)===64,'Migration checksum was not recorded.');
 echo "Existing-install admission migration verified.\n";
