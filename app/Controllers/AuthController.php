@@ -42,14 +42,14 @@ final class AuthController extends Controller
 
         if (!Auth::hasRole('applicant') && (bool) config('security.require_staff_mfa', true)) {
             $userId = (int) $user['id'];
-            $code = (string) random_int(100000, 999999);
-            Database::get()->insert('mfa_challenges', [
-                'user_id' => $userId, 'code_hash' => password_hash($code, PASSWORD_DEFAULT),
-                'attempts' => 0, 'expires_at' => date('Y-m-d H:i:s', time() + 600), 'created_at' => date('Y-m-d H:i:s'),
-            ]);
             Auth::logout();
             $_SESSION['mfa_pending_user_id'] = $userId;
-            (new MailService())->send($email, 'Your Netaji staff sign-in code', '<p>Your verification code is <strong>' . e($code) . '</strong>.</p><p>It expires in 10 minutes.</p>', 'staff_mfa');
+            if (!$this->sendStaffMfaCode($userId, $email)) {
+                unset($_SESSION['mfa_pending_user_id']);
+                Flash::set('warning', 'The staff OTP could not be delivered. Configure working SMTP in .env, or temporarily set REQUIRE_STAFF_MFA=false during local setup.');
+                $this->redirect('login');
+            }
+            Flash::set('success', 'A six-digit sign-in code was sent to your staff email address.');
             $this->redirect('mfa');
         }
 
@@ -65,16 +65,42 @@ final class AuthController extends Controller
         $this->view('auth/mfa', ['title' => 'Confirm it’s you'], 'auth');
     }
 
+    public function resendMfa(): never
+    {
+        $userId = (int) ($_SESSION['mfa_pending_user_id'] ?? 0);
+        $db = Database::get();
+        $user = $userId ? $db->fetch('SELECT id, email, status FROM users WHERE id = :id', ['id' => $userId]) : null;
+        if (!$user || $user['status'] !== 'active') {
+            unset($_SESSION['mfa_pending_user_id']);
+            Flash::set('warning', 'The sign-in session expired. Please sign in again.');
+            $this->redirect('login');
+        }
+        $lastCreated = $db->scalar('SELECT created_at FROM mfa_challenges WHERE user_id = :id ORDER BY id DESC LIMIT 1', ['id' => $userId]);
+        if ($lastCreated && strtotime((string) $lastCreated) > time() - 60) {
+            Flash::set('warning', 'Please wait one minute before requesting another code.');
+            $this->redirect('mfa');
+        }
+        if (!$this->sendStaffMfaCode($userId, (string) $user['email'])) {
+            Flash::set('warning', 'The code could not be delivered. Check the SMTP settings and Admin email-delivery logs.');
+            $this->redirect('mfa');
+        }
+        Flash::set('success', 'A new six-digit code was sent. The previous code is no longer valid.');
+        $this->redirect('mfa');
+    }
+
     public function verifyMfa(): never
     {
         $userId = (int) ($_SESSION['mfa_pending_user_id'] ?? 0);
         $challenge = Database::get()->fetch('SELECT * FROM mfa_challenges WHERE user_id = :id AND used_at IS NULL ORDER BY id DESC LIMIT 1', ['id' => $userId]);
         $code = trim((string) $this->input('code'));
-        if (!$challenge || $challenge['expires_at'] < date('Y-m-d H:i:s') || !password_verify($code, (string) $challenge['code_hash'])) {
+        if (!$challenge || (int) $challenge['attempts'] >= 5 || $challenge['expires_at'] < date('Y-m-d H:i:s') || !password_verify($code, (string) $challenge['code_hash'])) {
             if ($challenge) {
-                Database::get()->update('mfa_challenges', ['attempts' => (int) $challenge['attempts'] + 1], 'id = :id', ['id' => $challenge['id']]);
+                $attempts = (int) $challenge['attempts'] + 1;
+                $updates = ['attempts' => $attempts];
+                if ($attempts >= 5 || $challenge['expires_at'] < date('Y-m-d H:i:s')) $updates['used_at'] = date('Y-m-d H:i:s');
+                Database::get()->update('mfa_challenges', $updates, 'id = :id', ['id' => $challenge['id']]);
             }
-            Flash::withErrors(['code' => 'The code is invalid or has expired.']);
+            Flash::withErrors(['code' => 'The code is invalid or expired. Request a new code if needed.']);
             $this->redirect('mfa');
         }
         Database::get()->update('mfa_challenges', ['used_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $challenge['id']]);
@@ -198,6 +224,21 @@ final class AuthController extends Controller
         Database::get()->update('password_resets', ['used_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $reset['id']]);
         Flash::set('success', 'Password updated. Sign in with your new password.');
         $this->redirect('login');
+    }
+
+    private function sendStaffMfaCode(int $userId, string $email): bool
+    {
+        if ((string) config('mail.driver', 'log') !== 'smtp') return false;
+        $db = Database::get();
+        $db->query('UPDATE mfa_challenges SET used_at = :now WHERE user_id = :user AND used_at IS NULL', ['now' => date('Y-m-d H:i:s'), 'user' => $userId]);
+        $code = (string) random_int(100000, 999999);
+        $challengeId = $db->insert('mfa_challenges', [
+            'user_id' => $userId, 'code_hash' => password_hash($code, PASSWORD_DEFAULT),
+            'attempts' => 0, 'expires_at' => date('Y-m-d H:i:s', time() + 600), 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+        $sent = (new MailService())->send($email, 'Your Netaji staff sign-in code', '<p>Your verification code is <strong>' . e($code) . '</strong>.</p><p>It expires in 10 minutes. Do not share this code.</p>', 'staff_mfa');
+        if (!$sent) $db->update('mfa_challenges', ['used_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $challengeId]);
+        return $sent;
     }
 
     public function logout(): never

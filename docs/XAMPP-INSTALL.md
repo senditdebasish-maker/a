@@ -52,8 +52,27 @@ The installer uses `MAIL_DRIVER=log` and `REQUIRE_STAFF_MFA=false` to prevent a 
 
 1. Configure authenticated SMTP in `.env`.
 2. Test verification, password reset and staff OTP delivery.
-3. Change `REQUIRE_STAFF_MFA=true`.
+3. Change `REQUIRE_STAFF_MFA=true` only after delivery succeeds.
 4. Use HTTPS and change `SESSION_SECURE=true`.
+
+### Gmail SMTP example
+
+Google normally requires 2-Step Verification and an **App Password**. Do not use or share the normal Gmail password.
+
+```dotenv
+MAIL_DRIVER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-official-address@gmail.com
+MAIL_PASSWORD=your-16-character-google-app-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your-official-address@gmail.com
+MAIL_FROM_NAME="Netaji College of Pharmacy"
+```
+
+Keep `MAIL_FROM_ADDRESS` the same as the authenticated Gmail account unless Google Workspace has authorised another sender. Restart Apache after editing `.env`, request a new message, check Spam, and review **Admin → Email log** for `sent` or `failed` plus the provider error. Google Workspace administrators may need to permit App Passwords or provide the institution's approved SMTP relay.
+
+For an installation that is currently stuck at the OTP screen, temporarily set `REQUIRE_STAFF_MFA=false`, restart Apache, sign in, finish and test SMTP, then set it back to `true`. Never paste SMTP credentials into chat or commit them to Git.
 
 ## Scheduled encrypted backups
 

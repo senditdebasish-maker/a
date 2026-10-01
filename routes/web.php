@@ -39,6 +39,7 @@ $router->get('/login', [AuthController::class, 'login'], ['guest']);
 $router->post('/login', [AuthController::class, 'authenticate'], ['guest']);
 $router->get('/mfa', [AuthController::class, 'mfa']);
 $router->post('/mfa', [AuthController::class, 'verifyMfa']);
+$router->post('/mfa/resend', [AuthController::class, 'resendMfa']);
 $router->get('/register', [AuthController::class, 'register'], ['guest']);
 $router->post('/register', [AuthController::class, 'storeRegistration'], ['guest']);
 $router->get('/verify-email/{token}', [AuthController::class, 'verifyEmail'], ['guest']);

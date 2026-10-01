@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$installed) {
                 'SESSION_NAME=ncp_session', 'SESSION_LIFETIME=120', 'SESSION_SECURE=' . (str_starts_with(appBaseUrl(), 'https://') ? 'true' : 'false'), '',
                 'MAIL_DRIVER=log', 'MAIL_HOST=', 'MAIL_PORT=587', 'MAIL_USERNAME=', 'MAIL_PASSWORD=', 'MAIL_ENCRYPTION=tls',
                 'MAIL_FROM_ADDRESS=' . $adminEmail, 'MAIL_FROM_NAME=' . json_encode(trim((string) $_POST['college_name'])), '',
-                'UPLOAD_MAX_MB=5', 'BACKUP_ENCRYPTION=true', 'BACKUP_RETENTION_DAYS=30', 'REQUIRE_STAFF_MFA=true', '',
+                'UPLOAD_MAX_MB=5', 'BACKUP_ENCRYPTION=true', 'BACKUP_RETENTION_DAYS=30', 'REQUIRE_STAFF_MFA=false', '',
             ];
             if (file_put_contents($envPath, implode("\n", $env), LOCK_EX) === false) throw new RuntimeException('Could not write the .env file. Check folder permissions.');
             @chmod($envPath, 0640);
