@@ -145,7 +145,7 @@ final class Seeder
             'academic_session_id' => $sessionId, 'name' => 'Undergraduate Admissions 2027–28', 'code' => 'UG-2027',
             'slug' => 'undergraduate-admissions-2027-28', 'summary' => 'Apply to the undergraduate pharmacy programme through one secure, guided application.',
             'starts_at' => '2027-01-15 10:00:00', 'ends_at' => '2027-07-15 23:59:59', 'correction_deadline' => '2027-07-22 23:59:59',
-            'status' => 'draft', 'instructions' => 'Create one account, complete every section, upload legible documents and retain the acknowledgement after submission.',
+            'status' => 'published', 'instructions' => 'Create one account, complete every section, upload legible documents and retain the acknowledgement after submission.',
             'declaration_text' => 'I declare that the information and documents provided are complete and correct to the best of my knowledge.',
             'application_number_prefix' => 'NCP-APP-2027', 'created_at' => $this->now, 'updated_at' => $this->now,
         ]);
