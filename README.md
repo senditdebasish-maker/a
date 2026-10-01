@@ -2,6 +2,8 @@
 
 A no-Node.js, XAMPP-ready PHP/MySQL foundation for a configurable pharmacy-college website, online admissions, applicant/student portal, administration dashboard, multilingual CMS and future college ERP modules.
 
+**Developer handover:** Read [docs/DEVELOPER-HANDBOOK.md](docs/DEVELOPER-HANDBOOK.md) for the complete technical architecture, request lifecycle, database map, security model, workflows, extension rules, testing strategy, known boundaries and approved Phase 2 scope.
+
 > **Netaji College of Pharmacy is an editable demonstration identity in this repository.** Seeded content does not claim real affiliation, recognition, PCI/AICTE approval, sanctioned intake, faculty employment, or current admission rules.
 
 ## Visual preview
@@ -106,6 +108,7 @@ Release 1 admissions and website/CMS workflows are implemented. The sidebar item
 
 ## Documentation
 
+- [Complete developer handbook and Phase 2 handover](docs/DEVELOPER-HANDBOOK.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [XAMPP installation](docs/XAMPP-INSTALL.md)
 - [Production checklist](docs/PRODUCTION-CHECKLIST.md)
