@@ -14,13 +14,31 @@
   }
 
   const sidebar = one('[data-sidebar]');
-  all('[data-sidebar-toggle]').forEach((button) => {
-    button.addEventListener('click', () => sidebar?.classList.toggle('open'));
+  const sidebarToggles = all('[data-sidebar-toggle]');
+  const setSidebarOpen = (open) => {
+    if (!sidebar) return;
+    sidebar.classList.toggle('open', open);
+    document.body.classList.toggle('sidebar-open', open);
+    sidebarToggles.forEach((button) => button.setAttribute('aria-expanded', String(open)));
+  };
+  sidebarToggles.forEach((button) => {
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', () => setSidebarOpen(!sidebar?.classList.contains('open')));
   });
   document.addEventListener('click', (event) => {
-    if (window.innerWidth > 820 || !sidebar?.classList.contains('open')) return;
-    if (!sidebar.contains(event.target) && !event.target.closest('[data-sidebar-toggle]')) sidebar.classList.remove('open');
+    if (window.innerWidth > 900 || !sidebar?.classList.contains('open')) return;
+    if (!sidebar.contains(event.target) && !event.target.closest('[data-sidebar-toggle]')) setSidebarOpen(false);
   });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      setSidebarOpen(false);
+      menu?.classList.remove('open');
+      menuToggle?.setAttribute('aria-expanded', 'false');
+    }
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) setSidebarOpen(false);
+  }, { passive: true });
 
   all('[data-dismiss]').forEach((button) => {
     button.addEventListener('click', () => button.closest('.alert, .flash-bar')?.remove());

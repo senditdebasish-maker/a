@@ -8,6 +8,7 @@
     <title><?= e($title ?? config('app.name')) ?> | <?= e(config('app.name')) ?></title>
     <link rel="icon" href="<?= asset('images/favicon.svg') ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= asset('css/app.css') ?>">
+    <link rel="stylesheet" href="<?= asset('css/ui-polish.css') ?>">
 </head>
 <body class="public-site">
 <a class="skip-link" href="#main-content">Skip to content</a>
