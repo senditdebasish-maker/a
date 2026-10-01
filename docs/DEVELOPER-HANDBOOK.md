@@ -210,13 +210,21 @@ Rules for new database work:
 7. Audit privileged actions.
 8. Do not store files or large binary objects in MySQL; store protected paths and checksums.
 
-### Schema and upgrade warning
+### Schema and guarded upgrades
 
-The first installer imports `database/schema.mysql.sql` into an **empty database** and then runs `database/Seeder.php`.
+The first installer imports `database/schema.mysql.sql` into an **empty database** and then runs `database/Seeder.php`. Never import that clean-install schema over an existing institution database.
 
-The `schema_migrations` table exists, but Release 1 does not yet include an automatic migration runner for updating an already-installed database. A developer implementing Phase 2 must add versioned, idempotent migrations and a guarded upgrade command before changing production schema. Do not tell an existing institution to rerun the installer or import the full initial schema over live data.
+Existing installations use versioned, idempotent migrations under `database/migrations/`:
 
-## 8. Current database map (49 tables)
+```bash
+php scripts/admissions-preflight.php
+php scripts/migrate.php --dry-run
+php scripts/migrate.php --confirm=APPLY --backup-confirmed
+```
+
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes a rollback/forward-fix document; see `database/migrations/002_admission_management.rollback.md`.
+
+## 8. Current database map (63 tables)
 
 ### Identity, access and configuration
 
@@ -239,8 +247,13 @@ The `schema_migrations` table exists, but Release 1 does not yet include an auto
 - `seat_matrix`
 - `document_types`
 - `cycle_document_requirements`
+- `admission_categories`
+- `admission_configuration_versions`
+- `admission_form_sections`, `admission_form_fields`
+- `admission_fee_rules`
+- `application_number_counters`
 
-These are shared masters. Phase 2 must reuse them rather than create duplicate department, programme or session tables.
+These are shared masters. Admission-module work must reuse them rather than create duplicate department, programme, session, category, form, or fee masters.
 
 ### Applicant and application records
 
@@ -251,14 +264,20 @@ These are shared masters. Phase 2 must reuse them rather than create duplicate d
 - `education_records`
 - `entrance_exams`
 - `application_preferences`
-- `application_documents`
+- `application_documents`, `application_document_versions`
 - `application_status_history`
+- `application_field_responses`
+- `application_submission_snapshots`
+- `application_corrections`, `application_correction_items`
 - `staff_notes`
 - `application_declarations`
 
 ### Admission finance and student hand-off
 
+- `application_fee_assessments` — immutable per-application fee calculations.
 - `payments` — admission-stage manual payment proofs and verification, not a semester fee ledger.
+- `payment_refunds` — controlled refund decisions and processing history.
+- `seat_allocations` — transactional category/quota allocation history.
 - `student_enrollments` — student record created on admission while retaining the same `users` account.
 - `generated_documents` — metadata foundation for generated output.
 

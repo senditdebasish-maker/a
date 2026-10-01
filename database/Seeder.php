@@ -27,9 +27,10 @@ final class Seeder
             $this->settings($collegeName);
             [$departmentId, $programId, $cycleId, $cycleProgramId] = $this->academicSeed();
             $this->documents($cycleId);
+            $configurationVersionId = $this->admissionModuleSeed($cycleId, $cycleProgramId, $adminId);
             $this->cms($adminId, $departmentId);
             if ($demo) {
-                $this->demoOperations($cycleId, $cycleProgramId);
+                $this->demoOperations($cycleId, $cycleProgramId, $configurationVersionId);
             }
             $this->db->commit();
         } catch (\Throwable $exception) {
@@ -64,6 +65,11 @@ final class Seeder
             ['View dashboard','dashboard.view','dashboard'],
             ['View applications','applications.view','admissions'], ['Review applications','applications.review','admissions'],
             ['Assign applications','applications.assign','admissions'], ['Decide applications','applications.decide','admissions'],
+            ['View admission configuration','admissions.view','admissions'], ['Manage admission cycles','admissions.manage','admissions'],
+            ['Publish admission cycles','admissions.publish','admissions'], ['Duplicate admission cycles','admissions.duplicate','admissions'],
+            ['Manage admission forms','admission_forms.manage','admissions'], ['Manage admission documents','admission_documents.manage','admissions'],
+            ['Manage admission fees','admission_fees.manage','admissions'], ['Manage admission seats','admission_seats.manage','admissions'],
+            ['Manage correction requests','applications.correct','admissions'], ['Withdraw applications','applications.withdraw','admissions'],
             ['View documents','documents.view','documents'], ['Verify documents','documents.verify','documents'],
             ['View payments','payments.view','finance'], ['Verify payments','payments.verify','finance'], ['Reverse payments','payments.reverse','finance'],
             ['View reports','reports.view','reports'], ['Export reports','reports.export','reports'],
@@ -82,14 +88,14 @@ final class Seeder
             $this->insert('role_permissions', ['role_id' => $super, 'permission_id' => $permissionId]);
         }
         $matrix = [
-            'admission-officer' => ['dashboard.view','applications.view','applications.review','applications.assign','applications.decide','documents.view','documents.verify','payments.view','reports.view','reports.export','support.view','support.reply'],
-            'reviewer' => ['dashboard.view','applications.view','applications.review','documents.view','documents.verify'],
-            'accounts-officer' => ['dashboard.view','applications.view','payments.view','payments.verify','reports.view','reports.export'],
-            'principal' => ['dashboard.view','applications.view','documents.view','payments.view','reports.view','reports.export','audit.view'],
+            'admission-officer' => ['dashboard.view','applications.view','applications.review','applications.assign','applications.decide','applications.correct','applications.withdraw','admissions.view','admissions.manage','admissions.publish','admissions.duplicate','admission_forms.manage','admission_documents.manage','admission_fees.manage','admission_seats.manage','documents.view','documents.verify','payments.view','reports.view','reports.export','support.view','support.reply'],
+            'reviewer' => ['dashboard.view','applications.view','applications.review','applications.correct','admissions.view','documents.view','documents.verify'],
+            'accounts-officer' => ['dashboard.view','applications.view','admissions.view','admission_fees.manage','payments.view','payments.verify','reports.view','reports.export'],
+            'principal' => ['dashboard.view','applications.view','admissions.view','admissions.publish','documents.view','payments.view','reports.view','reports.export','audit.view'],
             'cms-editor' => ['dashboard.view','cms.view','cms.edit','cms.publish'],
             'support-agent' => ['dashboard.view','applications.view','support.view','support.reply'],
-            'auditor' => ['dashboard.view','applications.view','documents.view','payments.view','reports.view','audit.view'],
-            'office-staff' => ['dashboard.view','applications.view','documents.view','support.view'],
+            'auditor' => ['dashboard.view','applications.view','admissions.view','documents.view','payments.view','reports.view','audit.view'],
+            'office-staff' => ['dashboard.view','applications.view','admissions.view','documents.view','support.view'],
         ];
         foreach ($matrix as $role => $slugs) {
             $roleId = $this->id('roles', 'slug', $role);
@@ -137,6 +143,7 @@ final class Seeder
         ]);
         $cycleId = $this->insert('admission_cycles', [
             'academic_session_id' => $sessionId, 'name' => 'Undergraduate Admissions 2027–28', 'code' => 'UG-2027',
+            'slug' => 'undergraduate-admissions-2027-28', 'summary' => 'Apply to the undergraduate pharmacy programme through one secure, guided application.',
             'starts_at' => '2027-01-15 10:00:00', 'ends_at' => '2027-07-15 23:59:59', 'correction_deadline' => '2027-07-22 23:59:59',
             'status' => 'draft', 'instructions' => 'Create one account, complete every section, upload legible documents and retain the acknowledgement after submission.',
             'declaration_text' => 'I declare that the information and documents provided are complete and correct to the best of my knowledge.',
@@ -181,6 +188,89 @@ final class Seeder
             $required = !in_array($code, ['entrance-scorecard','domicile-certificate','category-certificate','transfer-migration'], true);
             $this->insert('cycle_document_requirements', ['admission_cycle_id' => $cycleId, 'document_type_id' => $typeId, 'program_id' => null, 'category' => null, 'is_required' => $required ? 1 : 0, 'stage' => $stage, 'sort_order' => $sort, 'created_at' => $this->now]);
         }
+    }
+
+    private function admissionModuleSeed(int $cycleId, int $cycleProgramId, int $adminId): int
+    {
+        foreach ([
+            ['General','General',0,10], ['SC','Scheduled Caste',1,20], ['ST','Scheduled Tribe',1,30],
+            ['OBC-A','Other Backward Class A',1,40], ['OBC-B','Other Backward Class B',1,50], ['EWS','Economically Weaker Section',1,60],
+        ] as [$code,$name,$reserved,$sort]) {
+            $this->insert('admission_categories', ['code'=>$code,'name'=>$name,'is_reserved'=>$reserved,'sort_order'=>$sort,'status'=>'active','created_at'=>$this->now,'updated_at'=>$this->now]);
+        }
+
+        $cycleProgram = $this->db->query('SELECT * FROM cycle_programs WHERE id = ' . (int) $cycleProgramId)->fetch(PDO::FETCH_ASSOC);
+        foreach ([['application_fee','Application fee',$cycleProgram['application_fee']],['admission_fee','Admission fee',$cycleProgram['admission_fee']]] as [$type,$label,$amount]) {
+            $this->insert('admission_fee_rules', ['cycle_program_id'=>$cycleProgramId,'category_code'=>null,'fee_type'=>$type,'label'=>$label,'amount'=>$amount,'currency'=>'INR','due_at'=>null,'late_fee_amount'=>0,'refund_policy'=>null,'status'=>'active','created_at'=>$this->now,'updated_at'=>$this->now]);
+        }
+
+        $sections = [
+            ['personal','Personal details','Identity and applicant profile',10],
+            ['address','Address','Permanent and correspondence address',20],
+            ['guardian','Parent / guardian','Parent or guardian contact',30],
+            ['academic','Academic history','Qualifying examinations and entrance test',40],
+            ['preferences','Programme preferences','Rank programme choices',50],
+        ];
+        $sectionIds = [];
+        foreach ($sections as [$key,$title,$description,$sort]) {
+            $sectionIds[$key] = $this->insert('admission_form_sections', ['admission_cycle_id'=>$cycleId,'section_key'=>$key,'title'=>$title,'description'=>$description,'sort_order'=>$sort,'status'=>'active','created_at'=>$this->now,'updated_at'=>$this->now]);
+        }
+        $fields = [
+            ['personal','date_of_birth','Date of birth','date','applicant_profiles.date_of_birth',1,null,10],
+            ['personal','gender','Gender','select','applicant_profiles.gender',1,['female'=>'Female','male'=>'Male','other'=>'Other','prefer_not_to_say'=>'Prefer not to say'],20],
+            ['personal','category','Category','select','applicant_profiles.category',1,null,30],
+            ['personal','nationality','Nationality','text','applicant_profiles.nationality',1,null,40],
+            ['personal','blood_group','Blood group','select','applicant_profiles.blood_group',0,['A+'=>'A+','A-'=>'A-','B+'=>'B+','B-'=>'B-','AB+'=>'AB+','AB-'=>'AB-','O+'=>'O+','O-'=>'O-'],50],
+            ['personal','mother_tongue','Mother tongue','text','applicant_profiles.mother_tongue',0,null,60],
+            ['personal','religion','Religion','text','applicant_profiles.religion',0,null,70],
+            ['address','address_line1','Address line 1','text','applicant_addresses.address_line1',1,null,10],
+            ['address','address_line2','Address line 2','text','applicant_addresses.address_line2',0,null,20],
+            ['address','city','City / town','text','applicant_addresses.city',1,null,30],
+            ['address','district','District','text','applicant_addresses.district',0,null,40],
+            ['address','state','State','text','applicant_addresses.state',1,null,50],
+            ['address','postal_code','PIN code','text','applicant_addresses.postal_code',1,null,60],
+            ['address','country','Country','text','applicant_addresses.country',1,null,70],
+            ['guardian','guardian_name','Full name','text','guardians.name',1,null,10],
+            ['guardian','relationship','Relationship','text','guardians.relationship',1,null,20],
+            ['guardian','occupation','Occupation','text','guardians.occupation',0,null,30],
+            ['guardian','annual_income','Annual family income','number','guardians.annual_income',0,null,40],
+            ['guardian','guardian_mobile','Mobile number','tel','guardians.mobile',1,null,50],
+            ['guardian','guardian_email','Email','email','guardians.email',0,null,60],
+            ['academic','class_10_percentage','Class 10 percentage','number','education_records.class_10.percentage',1,null,10],
+            ['academic','class_12_percentage','Class 12 percentage','number','education_records.class_12.percentage',1,null,20],
+            ['academic','class_12_subjects','Class 12 subjects','text','education_records.class_12.subjects',1,null,30],
+            ['academic','entrance_exam','Entrance examination','text','entrance_exams.exam_name',0,null,40],
+            ['preferences','program_preferences','Programme preferences','program_preferences','application_preferences.cycle_program_ids',1,null,10],
+        ];
+        foreach ($fields as [$section,$key,$label,$type,$binding,$required,$options,$sort]) {
+            $this->insert('admission_form_fields', [
+                'admission_cycle_id'=>$cycleId,'section_id'=>$sectionIds[$section],'field_key'=>$key,'label'=>$label,'field_type'=>$type,
+                'canonical_binding'=>$binding,'help_text'=>null,'placeholder'=>null,'default_value'=>null,
+                'options_json'=>$options ? json_encode($options, JSON_UNESCAPED_UNICODE) : null,
+                'validation_rules'=>json_encode(['required'=>(bool)$required], JSON_UNESCAPED_UNICODE),'conditional_rules'=>null,
+                'is_required'=>$required,'is_searchable'=>in_array($key,['category','city','district','state'],true)?1:0,
+                'sort_order'=>$sort,'status'=>'active','created_at'=>$this->now,'updated_at'=>$this->now,
+            ]);
+        }
+
+        $this->db->prepare('UPDATE admission_cycles SET configuration_version = 1 WHERE id = :id')->execute(['id'=>$cycleId]);
+        $queries = [
+            'cycle'=>'SELECT * FROM admission_cycles WHERE id = :id',
+            'programs'=>'SELECT cp.*, p.code AS program_code, p.name AS program_name FROM cycle_programs cp JOIN programs p ON p.id = cp.program_id WHERE cp.admission_cycle_id = :id ORDER BY p.sort_order, p.name',
+            'eligibility_rules'=>'SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id = er.cycle_program_id WHERE cp.admission_cycle_id = :id ORDER BY er.sort_order, er.id',
+            'documents'=>'SELECT cdr.*, dt.code AS document_code, dt.name AS document_name, dt.allowed_mimes, dt.max_size_mb FROM cycle_document_requirements cdr JOIN document_types dt ON dt.id = cdr.document_type_id WHERE cdr.admission_cycle_id = :id ORDER BY cdr.sort_order, cdr.id',
+            'seats'=>'SELECT sm.* FROM seat_matrix sm JOIN cycle_programs cp ON cp.id = sm.cycle_program_id WHERE cp.admission_cycle_id = :id ORDER BY sm.category, sm.quota',
+            'form_sections'=>'SELECT * FROM admission_form_sections WHERE admission_cycle_id = :id ORDER BY sort_order, id',
+            'form_fields'=>'SELECT * FROM admission_form_fields WHERE admission_cycle_id = :id ORDER BY section_id, sort_order, id',
+            'fees'=>'SELECT afr.* FROM admission_fee_rules afr JOIN cycle_programs cp ON cp.id = afr.cycle_program_id WHERE cp.admission_cycle_id = :id ORDER BY afr.fee_type, afr.id',
+        ];
+        $snapshot = [];
+        foreach ($queries as $key=>$sql) {
+            $statement=$this->db->prepare($sql); $statement->execute(['id'=>$cycleId]);
+            $snapshot[$key] = $key === 'cycle' ? $statement->fetch(PDO::FETCH_ASSOC) : $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+        $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return $this->insert('admission_configuration_versions', ['admission_cycle_id'=>$cycleId,'version_no'=>1,'snapshot_json'=>$json,'snapshot_hash'=>hash('sha256',$json),'status'=>'seeded_baseline','created_by'=>$adminId,'created_at'=>$this->now]);
     }
 
     private function cms(int $adminId, int $departmentId): void
@@ -234,7 +324,7 @@ final class Seeder
         }
     }
 
-    private function demoOperations(int $cycleId, int $cycleProgramId): void
+    private function demoOperations(int $cycleId, int $cycleProgramId, int $configurationVersionId): void
     {
         $officerId = $this->user(['first_name' => 'Meera', 'last_name' => 'Dutta', 'email' => 'admissions@demo.test', 'mobile' => '9000000002', 'password' => 'DemoOfficer#2027', 'verified' => true], 'admission-officer');
         $accountsId = $this->user(['first_name' => 'Rajiv', 'last_name' => 'Paul', 'email' => 'accounts@demo.test', 'mobile' => '9000000003', 'password' => 'DemoAccounts#2027', 'verified' => true], 'accounts-officer');
@@ -248,13 +338,25 @@ final class Seeder
         foreach ($names as $index => [$first,$last,$email,$status,$category,$gender,$district]) {
             $userId = $this->user(['first_name' => $first, 'last_name' => $last, 'email' => $email, 'mobile' => '9000001' . str_pad((string) $index, 3, '0', STR_PAD_LEFT), 'password' => 'StudentDemo#2027', 'verified' => true], 'applicant');
             $this->insert('applicant_profiles', ['user_id' => $userId, 'date_of_birth' => '2008-0' . ($index + 1) . '-15', 'gender' => $gender, 'category' => $category, 'nationality' => 'Indian', 'blood_group' => 'B+', 'religion' => null, 'mother_tongue' => 'Bengali', 'disability_status' => null, 'disability_percentage' => null, 'government_id_type' => null, 'government_id_encrypted' => null, 'government_id_last4' => null, 'photo_path' => null, 'signature_path' => null, 'profile_completion' => 90, 'created_at' => $this->now, 'updated_at' => $this->now]);
-            $appId = $this->insert('applications', ['application_number' => 'NCP-APP-2027-' . str_pad((string) ($index + 1), 6, '0', STR_PAD_LEFT), 'user_id' => $userId, 'admission_cycle_id' => $cycleId, 'status' => $status, 'current_step' => 7, 'completion_percentage' => 100, 'eligibility_status' => 'eligible', 'eligibility_flags' => null, 'assigned_to' => $officerId, 'assigned_at' => $this->now, 'submitted_at' => date('Y-m-d H:i:s', strtotime('-' . (8 - $index) . ' days')), 'locked_at' => $status === 'correction_required' ? null : $this->now, 'admitted_at' => $status === 'admitted' ? $this->now : null, 'withdrawal_reason' => null, 'created_at' => $this->now, 'updated_at' => $this->now, 'deleted_at' => null]);
+            $appId = $this->insert('applications', ['application_number' => 'NCP-APP-2027-' . str_pad((string) ($index + 1), 6, '0', STR_PAD_LEFT), 'user_id' => $userId, 'admission_cycle_id' => $cycleId, 'status' => $status, 'current_step' => 7, 'completion_percentage' => 100, 'eligibility_status' => 'eligible', 'eligibility_flags' => null, 'configuration_version_id' => $configurationVersionId, 'selected_cycle_program_id' => in_array($status, ['selected','admitted'], true) ? $cycleProgramId : null, 'assigned_to' => $officerId, 'assigned_at' => $this->now, 'submitted_at' => date('Y-m-d H:i:s', strtotime('-' . (8 - $index) . ' days')), 'locked_at' => $status === 'correction_required' ? null : $this->now, 'admitted_at' => $status === 'admitted' ? $this->now : null, 'withdrawal_reason' => null, 'created_at' => $this->now, 'updated_at' => $this->now, 'deleted_at' => null]);
             $this->insert('applicant_addresses', ['application_id' => $appId, 'address_line1' => ($index + 11) . ' College Road', 'address_line2' => null, 'city' => $district, 'district' => $district, 'state' => 'West Bengal', 'postal_code' => '700' . str_pad((string) ($index + 101), 3, '0', STR_PAD_LEFT), 'country' => 'India', 'same_as_correspondence' => 1, 'correspondence_address' => null, 'created_at' => $this->now, 'updated_at' => $this->now]);
             $this->insert('guardians', ['application_id' => $appId, 'name' => 'Sample Guardian', 'relationship' => 'Parent', 'occupation' => 'Service', 'annual_income' => 480000, 'mobile' => '9000099999', 'email' => null, 'address' => null, 'created_at' => $this->now, 'updated_at' => $this->now]);
             foreach ([['class_10','WBBSE',2024,82],['class_12','WBCHSE',2026,78]] as [$level,$board,$year,$percentage]) $this->insert('education_records', ['application_id' => $appId, 'level' => $level, 'board' => $board, 'institution' => 'Demonstration Higher Secondary School', 'passing_year' => $year, 'roll_number' => 'DEMO' . $index, 'registration_number' => null, 'total_marks' => 500, 'obtained_marks' => $percentage * 5, 'percentage' => $percentage, 'grade_cgpa' => null, 'subjects' => $level === 'class_12' ? 'English, Physics, Chemistry, Biology' : 'General curriculum', 'result_status' => 'passed', 'created_at' => $this->now, 'updated_at' => $this->now]);
             $this->insert('application_preferences', ['application_id' => $appId, 'cycle_program_id' => $cycleProgramId, 'preference_order' => 1, 'allocation_status' => $status === 'admitted' ? 'accepted' : 'pending', 'created_at' => $this->now]);
             $this->insert('application_status_history', ['application_id' => $appId, 'from_status' => 'draft', 'to_status' => 'submitted', 'remarks' => 'Demonstration application submitted', 'changed_by' => $userId, 'created_at' => $this->now]);
             if ($status !== 'submitted') $this->insert('application_status_history', ['application_id' => $appId, 'from_status' => 'submitted', 'to_status' => $status, 'remarks' => $status === 'correction_required' ? 'Please upload a clearer marksheet.' : 'Demonstration workflow update', 'changed_by' => $officerId, 'created_at' => $this->now]);
+            $snapshot = json_encode(['application_id'=>$appId,'user_id'=>$userId,'cycle_id'=>$cycleId,'category'=>$category,'status'=>$status,'cycle_program_ids'=>[$cycleProgramId]], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+            $this->insert('application_submission_snapshots', ['application_id'=>$appId,'configuration_version_id'=>$configurationVersionId,'snapshot_json'=>$snapshot,'snapshot_hash'=>hash('sha256',$snapshot),'created_at'=>$this->now]);
+            $this->insert('application_fee_assessments', ['application_id'=>$appId,'cycle_program_id'=>$cycleProgramId,'fee_rule_id'=>null,'configuration_version_id'=>$configurationVersionId,'fee_type'=>'application_fee','category_code'=>$category,'base_amount'=>1000,'late_amount'=>0,'total_amount'=>1000,'currency'=>'INR','due_at'=>null,'calculation_json'=>json_encode(['strategy'=>'first_preference']),'status'=>'due','created_at'=>$this->now,'updated_at'=>$this->now]);
+            if (in_array($status, ['selected','admitted'], true)) {
+                $seatStatement = $this->db->prepare('SELECT id FROM seat_matrix WHERE cycle_program_id = :program AND category = :category ORDER BY id LIMIT 1');
+                $seatStatement->execute(['program'=>$cycleProgramId,'category'=>$category]);
+                $seatId = (int) $seatStatement->fetchColumn();
+                if ($seatId) {
+                    $this->insert('seat_allocations', ['application_id'=>$appId,'cycle_program_id'=>$cycleProgramId,'seat_matrix_id'=>$seatId,'category'=>$category,'quota'=>'state','status'=>$status==='admitted'?'confirmed':'reserved','is_active'=>1,'allocated_by'=>$officerId,'allocated_at'=>$this->now,'confirmed_at'=>$status==='admitted'?$this->now:null,'released_by'=>null,'released_at'=>null,'release_reason'=>null,'created_at'=>$this->now,'updated_at'=>$this->now]);
+                    $this->db->prepare('UPDATE seat_matrix SET filled_seats = filled_seats + 1, updated_at = :updated WHERE id = :id')->execute(['updated'=>$this->now,'id'=>$seatId]);
+                }
+            }
             $this->insert('notifications', ['user_id' => $userId, 'type' => 'status', 'title' => 'Application status updated', 'message' => 'Your demonstration application is now ' . str_replace('_', ' ', $status) . '.', 'action_url' => '/student/dashboard', 'read_at' => null, 'created_at' => $this->now]);
             if ($status === 'admitted') $this->insert('student_enrollments', ['application_id' => $appId, 'user_id' => $userId, 'cycle_program_id' => $cycleProgramId, 'enrollment_number' => 'NCP-2027-' . str_pad((string) $appId, 5, '0', STR_PAD_LEFT), 'university_roll_number' => null, 'status' => 'active', 'enrolled_at' => $this->now, 'created_at' => $this->now, 'updated_at' => $this->now]);
         }

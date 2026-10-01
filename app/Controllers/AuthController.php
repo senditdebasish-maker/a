@@ -162,9 +162,11 @@ final class AuthController extends Controller
         });
 
         $link = url('verify-email/' . $token);
-        (new MailService())->send($email, 'Verify your Netaji applicant account', '<p>Welcome to Netaji College of Pharmacy.</p><p><a href="' . e($link) . '">Verify your email address</a></p><p>This link expires in 24 hours.</p>', 'verify_email');
-        AuditService::log('registered', 'user', $userId);
-        Flash::set('success', 'Account created. Open the verification email in the local mail log or your inbox.');
+        $sent = (new MailService())->send($email, 'Verify your Netaji applicant account', '<p>Welcome to Netaji College of Pharmacy.</p><p><a href="' . e($link) . '">Verify your email address</a></p><p>This link expires in 24 hours.</p>', 'verify_email');
+        AuditService::log('registered', 'user', $userId, [], ['verification_delivered' => $sent]);
+        Flash::set($sent ? 'success' : 'warning', $sent
+            ? 'Account created. Open the verification email sent to your inbox.'
+            : 'Account created, but verification could not be delivered. Contact Admissions after SMTP has been configured; authentication links are never stored in the mail log.');
         $this->redirect('login');
     }
 

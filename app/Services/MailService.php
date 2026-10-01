@@ -10,13 +10,17 @@ use Throwable;
 
 final class MailService
 {
+    private const SENSITIVE_TEMPLATES = ['verify_email', 'password_reset', 'staff_mfa'];
+
     public function send(string $to, string $subject, string $html, ?string $template = null): bool
     {
         $config = config('mail');
-        $status = 'logged';
+        $driver = (string) ($config['driver'] ?? 'log');
+        $sensitive = in_array((string) $template, self::SENSITIVE_TEMPLATES, true);
+        $status = $driver === 'log' ? ($sensitive ? 'suppressed' : 'logged') : 'queued';
         $error = null;
         try {
-            if (($config['driver'] ?? 'log') === 'smtp') {
+            if ($driver === 'smtp') {
                 if (!class_exists(PHPMailer::class)) {
                     throw new \RuntimeException('PHPMailer is unavailable. Run composer install.');
                 }
@@ -39,19 +43,55 @@ final class MailService
             }
         } catch (Throwable $exception) {
             $status = 'failed';
-            $error = $exception->getMessage();
+            $error = mb_substr($exception->getMessage(), 0, 2000);
         }
 
-        Database::get()->insert('mail_logs', [
+        $this->logDelivery($to, $subject, $html, $template, $sensitive, $status, $error);
+        return $status === 'sent' || $status === 'logged';
+    }
+
+    private function logDelivery(string $to, string $subject, string $html, ?string $template, bool $sensitive, string $status, ?string $error): void
+    {
+        $db = Database::get();
+        $safeSchema = $this->safeLogSchemaAvailable($db);
+        if ($sensitive && !$safeSchema) {
+            // Upgrades may briefly run new code before the migration. Never fall
+            // back to the legacy NOT NULL body column for an authentication secret.
+            return;
+        }
+        $base = [
             'recipient' => $to,
             'subject' => $subject,
             'template_key' => $template,
-            'body_html' => $html,
+            'body_html' => $sensitive ? null : $html,
             'status' => $status,
             'error_message' => $error,
             'created_at' => date('Y-m-d H:i:s'),
             'sent_at' => $status === 'sent' ? date('Y-m-d H:i:s') : null,
-        ]);
-        return $status !== 'failed';
+        ];
+        if ($safeSchema) {
+            $base += [
+                'body_checksum_sha256' => hash('sha256', $html),
+                'sensitive_redacted' => $sensitive ? 1 : 0,
+                'correlation_id' => bin2hex(random_bytes(16)),
+                'metadata_json' => json_encode([
+                    'content_retained' => !$sensitive,
+                    'content_bytes' => strlen($html),
+                    'redacted_reason' => $sensitive ? 'authentication_secret' : null,
+                ], JSON_UNESCAPED_SLASHES),
+            ];
+        }
+        $db->insert('mail_logs', $base);
+    }
+
+    private function safeLogSchemaAvailable(Database $db): bool
+    {
+        try {
+            return (int) $db->scalar(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'mail_logs' AND column_name = 'sensitive_redacted'"
+            ) === 1;
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
