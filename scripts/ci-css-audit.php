@@ -146,6 +146,20 @@ $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: sliding workspace contract is missing {$contract}.");
 }
+$workflowIndex = file_get_contents($root . '/resources/views/admin/applications/index.php') ?: '';
+$workflowShow = file_get_contents($root . '/resources/views/admin/applications/show.php') ?: '';
+foreach (['data-application-board','data-workflow-card','data-application-select','data-confirm-bulk','data-workflow-dialog'] as $contract) {
+    if (!str_contains($workflowIndex, $contract)) $fail("Application pipeline view is missing {$contract}.");
+}
+foreach (['application-lifecycle','guided-review-summary','aria-current="step"'] as $contract) {
+    if (!str_contains($workflowShow, $contract)) $fail("Guided application review is missing {$contract}.");
+}
+foreach (['dragstart','dataset.dropStatus','showModal','requestSubmit','data-confirm-bulk'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: graphical application workflow contract is missing {$contract}.");
+}
+foreach (['.application-board','.workflow-column','.workflow-card','.bulk-workflow-bar','.application-lifecycle','.guided-review-summary'] as $contract) {
+    if (!str_contains($polish, $contract)) $fail("ui-polish.css: graphical workflow rule is missing {$contract}.");
+}
 foreach (['database/migrations/004_cms_page_builder.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
     if (!is_file($root . '/' . $builderFile)) $fail("CMS page builder file is missing: {$builderFile}");
 }

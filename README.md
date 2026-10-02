@@ -29,7 +29,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Draft, submission, assignment, review, correction, decision, fee verification and admission state history.
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.
 - Applicant dashboard, document status, configured-fee payment proof, receipts, notifications and threaded helpdesk tickets.
-- Admin dashboard, filtered application queue, automated eligibility flags with manual final decisions, document/payment decisions, staff notes, reporting, CSV export, users overview, settings, audit and mail log.
+- Admin dashboard plus a responsive nine-stage application pipeline with Kanban and table views, workload/ageing/readiness signals, guided individual review, validated drag/button transitions, confirmed bulk assignment/status actions with partial-failure reporting, automated eligibility flags, document/payment decisions, notes, reports and CSV export.
 - Flexible CMS page builder for every public content route, with ordered branded sections, draft/publish/archive controls, safe media/links, live structured-content feeds, and Bengali/Hindi translations with English fallback.
 - CMS CRUD for notices, faculty, facilities, FAQs and gallery images; programme and admission-cycle records remain authoritative operational data rather than duplicated content.
 - Public notice filtering/detail pages and a staff processing inbox for public contact enquiries.

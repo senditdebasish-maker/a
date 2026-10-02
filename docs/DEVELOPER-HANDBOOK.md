@@ -413,26 +413,36 @@ When adding a module:
 Canonical state model:
 
 ```text
-draft
-  → submitted
-  → under_review
-  → correction_required
-      → submitted or under_review
-  → approved or selected
-  → fee_verified
-  → admitted
+draft → submitted/resubmitted → eligibility_check → under_review
+      → correction_required → resubmitted
+      → approved → selected → payment_pending → fee_verified → admitted
 
 Possible terminal/exception states: rejected, withdrawn
 ```
 
-Rules are enforced in `Admin\ApplicationController::status()`:
+`App\Services\ApplicationWorkflowService` is authoritative. The admin controller and every graphical or batch action must call it rather than updating application status directly:
 
 - only listed transitions are accepted;
-- correction and rejection require remarks;
-- every transition writes `application_status_history`;
-- every transition notifies the applicant;
-- admission creates `student_enrollments` if one does not already exist;
+- `status_version` provides optimistic-lock protection;
+- programme eligibility, assessed fees, seat allocation and enrolment prerequisites are checked at the stages where they apply;
+- targeted corrections remain in the guided record because they require section, field or document instructions;
+- selection remains in the guided record because it requires programme, category and quota context;
+- rejection and withdrawal require remarks;
+- every successful transition writes `application_status_history`, an audit event and an applicant notification;
+- admission confirms the allocation and creates `student_enrollments` if one does not already exist;
 - the existing user account remains active.
+
+### Staff application workflow
+
+`GET /admin/applications` defaults to a nine-column responsive pipeline: Intake, Review, Corrections, Approved, Selected, Payment, Fee verified, Admitted and Closed. The same filters and reviewer scope apply to the alternative paginated table and CSV export.
+
+- Cards show age, reviewer, first preference, document/payment readiness and a recommended next action.
+- Desktop drag-and-drop proposes only a transition listed for that record. Every card also has keyboard/touch-friendly action controls.
+- Drop and button actions submit the current `status_version`; the server re-checks the transition and all workflow invariants.
+- Batch assignment is limited to 100 validated IDs and an active staff reviewer.
+- Batch status processing executes records independently through `ApplicationWorkflowService`, reports changed and skipped totals, and never offers targeted correction or seat selection as a generic batch action.
+- Reviewer users continue to see only applications assigned to them. The bulk routes have their own `applications.assign` or `applications.decide` permission middleware.
+- `GET /admin/applications/{id}` provides the graphical lifecycle rail, readiness summary, sliding evidence panels and applicant-specific decision controls.
 
 The application controller supports:
 
