@@ -151,31 +151,61 @@ final class AdmissionController extends Controller
         $this->redirect('admin/admissions/'.$id.'#programmes');
     }
 
+    public function saveProgram(string $id, string $programId): never
+    {
+        try {
+            $cycle=$this->draftCycle((int)$id);$db=Database::get();$program=$db->fetch('SELECT * FROM cycle_programs WHERE id=:program AND admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]);
+            if(!$program)throw new RuntimeException('Cycle programme not found.');
+            $general=($_POST['minimum_marks_general']??'')!==''?(float)$_POST['minimum_marks_general']:null;$reserved=($_POST['minimum_marks_reserved']??'')!==''?(float)$_POST['minimum_marks_reserved']:null;
+            if(($general!==null&&($general<0||$general>100))||($reserved!==null&&($reserved<0||$reserved>100)))throw new RuntimeException('Minimum marks must be between 0 and 100.');
+            $minAge=($_POST['min_age']??'')!==''?(int)$_POST['min_age']:null;$maxAge=($_POST['max_age']??'')!==''?(int)$_POST['max_age']:null;if($minAge!==null&&$maxAge!==null&&$maxAge<$minAge)throw new RuntimeException('Maximum age cannot be below minimum age.');
+            $data=['minimum_marks_general'=>$general,'minimum_marks_reserved'=>$reserved,'min_age'=>$minAge,'max_age'=>$maxAge,'accepted_entrance_exams'=>trim((string)($_POST['accepted_entrance_exams']??''))?:null,'status'=>in_array($_POST['status']??'active',['active','inactive'],true)?$_POST['status']:'active','updated_at'=>date('Y-m-d H:i:s')];
+            $db->update('cycle_programs',$data,'id=:id',['id'=>$program['id']]);AuditService::log('cycle_program_updated','cycle_program',$program['id'],$program,$data);Flash::set('success','Programme eligibility defaults and availability saved.');
+        }catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}
+        $this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
+    }
+
+    public function deleteProgram(string $id, string $programId): never
+    {
+        try{
+            $cycle=$this->draftCycle((int)$id);$db=Database::get();$program=$db->fetch('SELECT cp.*,p.name FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id WHERE cp.id=:program AND cp.admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$program)throw new RuntimeException('Cycle programme not found.');
+            if((int)$db->scalar('SELECT COUNT(*) FROM application_preferences WHERE cycle_program_id=:program',['program'=>$program['id']])>0)throw new RuntimeException('This programme already has application preferences and cannot be removed.');
+            $db->transaction(function(Database $db)use($program,$cycle):void{$db->query('DELETE FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND program_id=:program',['cycle'=>$cycle['id'],'program'=>$program['program_id']]);$db->query('DELETE FROM cycle_programs WHERE id=:id',['id'=>$program['id']]);});AuditService::log('cycle_program_removed','cycle_program',$program['id'],$program,[]);Flash::set('success','Programme and its draft rules, seats and fees were removed from the cycle.');
+        }catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}
+        $this->redirect('admin/admissions/'.$id.'#programmes');
+    }
+
     public function saveSeats(string $id, string $programId): never
     {
         try {
             $cycle=$this->draftCycle((int)$id); $db=Database::get(); $cp=$db->fetch('SELECT * FROM cycle_programs WHERE id=:program AND admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]); if(!$cp) throw new RuntimeException('Cycle programme not found.');
-            $rows=(array)($_POST['seats']??[]); if(!$rows) throw new RuntimeException('Seat rows are required.');
-            $db->transaction(function(Database $db) use($rows,$cp): void {
+            $rows=(array)($_POST['seats']??[]); if(!$rows) throw new RuntimeException('Seat rows are required.');$capacity=(int)($_POST['seat_capacity']??$cp['seat_capacity']);if($capacity<1)throw new RuntimeException('Programme capacity must be positive.');
+            $db->transaction(function(Database $db) use($rows,$cp,$capacity): void {
                 $total=0; $updates=[];
                 foreach($rows as $seatId=>$value){ $seat=$db->fetch('SELECT * FROM seat_matrix WHERE id=:id AND cycle_program_id=:program FOR UPDATE',['id'=>(int)$seatId,'program'=>$cp['id']]); if(!$seat) throw new RuntimeException('Invalid seat matrix row.'); $value=(int)$value; if($value<(int)$seat['filled_seats']) throw new RuntimeException('Seats cannot be below active allocations.'); $total+=$value; $updates[]=[$seat,$value]; }
                 $newCategory=trim((string)($_POST['new_category']??'')); $newQuota=trim((string)($_POST['new_quota']??'state')); $newSeats=(int)($_POST['new_seats']??0);
                 if($newCategory!==''&&$newSeats>0){ if(!(int)$db->scalar("SELECT COUNT(*) FROM admission_categories WHERE code=:code AND status='active'",['code'=>$newCategory])) throw new RuntimeException('Select a valid category for the new seat row.'); if($db->fetch('SELECT id FROM seat_matrix WHERE cycle_program_id=:program AND category=:category AND quota=:quota',['program'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota])) throw new RuntimeException('That category and quota row already exists.'); $total+=$newSeats; }
-                if($total!==(int)$cp['seat_capacity']) throw new RuntimeException('Category seat total must equal programme capacity.');
+                if($total!==$capacity) throw new RuntimeException('Category seat total must equal the programme capacity entered above.');
                 foreach($updates as [$seat,$value]) $db->update('seat_matrix',['seats'=>$value,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$seat['id']]);
                 if($newCategory!==''&&$newSeats>0) $db->insert('seat_matrix',['cycle_program_id'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota,'seats'=>$newSeats,'filled_seats'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
+                $db->update('cycle_programs',['seat_capacity'=>$capacity,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$cp['id']]);
             });
-            AuditService::log('seat_matrix_updated','cycle_program',$cp['id'],[],['seat_total'=>$cp['seat_capacity']]); Flash::set('success','Seat matrix saved.');
+            AuditService::log('seat_matrix_updated','cycle_program',$cp['id'],[],['seat_total'=>$capacity]); Flash::set('success','Seat matrix saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/admissions/'.$id.'#seats');
+    }
+
+    public function deleteSeat(string $id,string $programId,string $seatId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$seat=$db->fetch('SELECT sm.* FROM seat_matrix sm JOIN cycle_programs cp ON cp.id=sm.cycle_program_id WHERE sm.id=:seat AND sm.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['seat'=>(int)$seatId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$seat)throw new RuntimeException('Seat row not found.');if((int)$seat['filled_seats']>0)throw new RuntimeException('A seat row with active allocations cannot be removed.');$remaining=(int)$db->scalar('SELECT COALESCE(SUM(seats),0) FROM seat_matrix WHERE cycle_program_id=:program AND id<>:seat',['program'=>(int)$programId,'seat'=>(int)$seatId]);if($remaining<1)throw new RuntimeException('A programme must retain at least one positive seat row.');$db->transaction(function(Database $db)use($seat,$programId,$remaining):void{$db->query('DELETE FROM seat_matrix WHERE id=:id',['id'=>$seat['id']]);$db->update('cycle_programs',['seat_capacity'=>$remaining,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>(int)$programId]);});AuditService::log('seat_matrix_row_removed','seat_matrix',$seat['id'],$seat,[]);Flash::set('success','Seat row removed and programme capacity recalculated.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
     }
 
     public function saveEligibility(string $id, string $programId): never
     {
         try {
             $cycle=$this->draftCycle((int)$id); $db=Database::get(); $cp=$db->fetch('SELECT id FROM cycle_programs WHERE id=:program AND admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]); if(!$cp) throw new RuntimeException('Cycle programme not found.');
-            $operator=(string)($_POST['operator']??''); if(!in_array($operator,['eq','neq','gt','gte','lt','lte','in','not_in','contains','between','regex'],true)) throw new RuntimeException('Invalid eligibility operator.');
-            $data=['cycle_program_id'=>$cp['id'],'rule_type'=>trim((string)($_POST['rule_type']??'custom')),'field_name'=>trim((string)($_POST['field_name']??'')),'operator'=>$operator,'comparison_value'=>trim((string)($_POST['comparison_value']??'')),'message'=>trim((string)($_POST['message']??'')),'is_blocking'=>isset($_POST['is_blocking'])?1:0,'sort_order'=>(int)($_POST['sort_order']??0)];
+            $operator=(string)($_POST['operator']??''); if(!in_array($operator,['eq','neq','gt','gte','lt','lte','in','not_in','contains','between','regex'],true)) throw new RuntimeException('Invalid eligibility operator.');$ruleType=trim((string)($_POST['rule_type']??'custom'));if(!in_array($ruleType,['marks','subject','age','category','entrance','custom'],true))throw new RuntimeException('Invalid eligibility rule type.');
+            $data=['cycle_program_id'=>$cp['id'],'rule_type'=>$ruleType,'field_name'=>trim((string)($_POST['field_name']??'')),'operator'=>$operator,'comparison_value'=>trim((string)($_POST['comparison_value']??'')),'message'=>trim((string)($_POST['message']??'')),'is_blocking'=>isset($_POST['is_blocking'])?1:0,'sort_order'=>(int)($_POST['sort_order']??0)];
             if($data['field_name']===''||$data['comparison_value']===''||$data['message']==='') throw new RuntimeException('Field, comparison value and message are required.');
             $ruleId=(int)($_POST['rule_id']??0); if($ruleId){ if(!(int)$db->scalar('SELECT COUNT(*) FROM eligibility_rules WHERE id=:id AND cycle_program_id=:program',['id'=>$ruleId,'program'=>$cp['id']])) throw new RuntimeException('Eligibility rule not found.'); $db->update('eligibility_rules',$data,'id=:id',['id'=>$ruleId]); } else $ruleId=$db->insert('eligibility_rules',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('eligibility_rule_saved','eligibility_rule',$ruleId,[],$data); Flash::set('success','Eligibility rule saved.');
@@ -183,15 +213,25 @@ final class AdmissionController extends Controller
         $this->redirect('admin/admissions/'.$id.'#eligibility');
     }
 
+    public function deleteEligibility(string $id,string $programId,string $ruleId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$rule=$db->fetch('SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id=er.cycle_program_id WHERE er.id=:rule AND er.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['rule'=>(int)$ruleId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$rule)throw new RuntimeException('Eligibility rule not found.');$db->query('DELETE FROM eligibility_rules WHERE id=:id',['id'=>$rule['id']]);AuditService::log('eligibility_rule_removed','eligibility_rule',$rule['id'],$rule,[]);Flash::set('success','Eligibility rule removed. Publication readiness will require another rule if none remain.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
+    }
+
     public function saveSection(string $id): never
     {
         try {
-            $cycle=$this->draftCycle((int)$id); $db=Database::get(); $key=$this->slug((string)($_POST['section_key']??'')); $title=trim((string)($_POST['title']??'')); if($key===''||$title==='') throw new RuntimeException('Section key and title are required.');
+            $cycle=$this->draftCycle((int)$id); $db=Database::get(); $key=$this->slug((string)($_POST['section_key']??''),'_'); $title=trim((string)($_POST['title']??'')); if($key===''||$title==='') throw new RuntimeException('Section key and title are required.');
             $sectionId=(int)($_POST['section_id']??0); $data=['admission_cycle_id'=>$cycle['id'],'section_key'=>$key,'title'=>$title,'description'=>trim((string)($_POST['description']??'')),'sort_order'=>(int)($_POST['sort_order']??0),'status'=>in_array($_POST['status']??'active',['active','inactive'],true)?$_POST['status']:'active','updated_at'=>date('Y-m-d H:i:s')];
             if($sectionId){ if(!(int)$db->scalar('SELECT COUNT(*) FROM admission_form_sections WHERE id=:id AND admission_cycle_id=:cycle',['id'=>$sectionId,'cycle'=>$cycle['id']])) throw new RuntimeException('Form section not found.'); $db->update('admission_form_sections',$data,'id=:id',['id'=>$sectionId]); } else $sectionId=$db->insert('admission_form_sections',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('admission_form_section_saved','admission_form_section',$sectionId,[],$data); Flash::set('success','Form section saved.');
         } catch(\Throwable $exception){ Flash::set('warning',$exception instanceof RuntimeException?$exception->getMessage():'Section key must be unique in this cycle.'); }
         $this->redirect('admin/admissions/'.$id.'#form-builder');
+    }
+
+    public function deleteSection(string $id,string $sectionId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$section=$db->fetch('SELECT * FROM admission_form_sections WHERE id=:section AND admission_cycle_id=:cycle',['section'=>(int)$sectionId,'cycle'=>$cycle['id']]);if(!$section)throw new RuntimeException('Form section not found.');if((int)$db->scalar('SELECT COUNT(*) FROM admission_form_fields WHERE section_id=:section',['section'=>$section['id']])>0)throw new RuntimeException('Move or remove the fields in this section before deleting it.');$db->query('DELETE FROM admission_form_sections WHERE id=:id',['id'=>$section['id']]);AuditService::log('admission_form_section_removed','admission_form_section',$section['id'],$section,[]);Flash::set('success','Empty form section removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#form-builder');
     }
 
     public function saveField(string $id): never
@@ -211,18 +251,29 @@ final class AdmissionController extends Controller
         $this->redirect('admin/admissions/'.$id.'#form-builder');
     }
 
+    public function deleteField(string $id,string $fieldId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$field=$db->fetch('SELECT * FROM admission_form_fields WHERE id=:field AND admission_cycle_id=:cycle',['field'=>(int)$fieldId,'cycle'=>$cycle['id']]);if(!$field)throw new RuntimeException('Form field not found.');if((int)$db->scalar('SELECT COUNT(*) FROM application_field_responses WHERE form_field_id=:field',['field'=>$field['id']])>0)throw new RuntimeException('This field already has applicant responses. Set it inactive instead of deleting it.');$db->query('DELETE FROM admission_form_fields WHERE id=:id',['id'=>$field['id']]);AuditService::log('admission_form_field_removed','admission_form_field',$field['id'],$field,[]);Flash::set('success','Draft form field removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#form-builder');
+    }
+
     public function saveDocument(string $id): never
     {
         try {
             $cycle=$this->draftCycle((int)$id); $db=Database::get(); $typeId=(int)($_POST['document_type_id']??0); if(!(int)$db->scalar("SELECT COUNT(*) FROM document_types WHERE id=:id AND status='active'",['id'=>$typeId])) throw new RuntimeException('Select an active document type.');
             $programId=($_POST['program_id']??'')!==''?(int)$_POST['program_id']:null; if($programId&&!(int)$db->scalar('SELECT COUNT(*) FROM cycle_programs WHERE admission_cycle_id=:cycle AND program_id=:program',['cycle'=>$cycle['id'],'program'=>$programId])) throw new RuntimeException('Document programme is not assigned to this cycle.');
             $category=trim((string)($_POST['category']??''))?:null; if($category&&!(int)$db->scalar("SELECT COUNT(*) FROM admission_categories WHERE code=:code AND status='active'",['code'=>$category])) throw new RuntimeException('Invalid document category.');
-            $existing=$db->fetch('SELECT id FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND document_type_id=:type AND program_id <=> :program AND category <=> :category',['cycle'=>$cycle['id'],'type'=>$typeId,'program'=>$programId,'category'=>$category]);
+            $requirementId=(int)($_POST['requirement_id']??0);$existing=$requirementId?$db->fetch('SELECT id FROM cycle_document_requirements WHERE id=:id AND admission_cycle_id=:cycle',['id'=>$requirementId,'cycle'=>$cycle['id']]):$db->fetch('SELECT id FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND document_type_id=:type AND program_id <=> :program AND category <=> :category',['cycle'=>$cycle['id'],'type'=>$typeId,'program'=>$programId,'category'=>$category]);if($requirementId&&!$existing)throw new RuntimeException('Document requirement not found.');
+            $duplicate=$db->fetch('SELECT id FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND document_type_id=:type AND program_id <=> :program AND category <=> :category AND id<>:id',['cycle'=>$cycle['id'],'type'=>$typeId,'program'=>$programId,'category'=>$category,'id'=>$existing['id']??0]);if($duplicate)throw new RuntimeException('An identical document requirement already exists.');
             $data=['admission_cycle_id'=>$cycle['id'],'document_type_id'=>$typeId,'program_id'=>$programId,'category'=>$category,'is_required'=>isset($_POST['is_required'])?1:0,'stage'=>in_array($_POST['stage']??'application',['application','admission'],true)?$_POST['stage']:'application','sort_order'=>(int)($_POST['sort_order']??0)];
             if($existing){ $db->update('cycle_document_requirements',$data,'id=:id',['id'=>$existing['id']]); $requirementId=(int)$existing['id']; } else $requirementId=$db->insert('cycle_document_requirements',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('admission_document_requirement_saved','cycle_document_requirement',$requirementId,[],$data); Flash::set('success','Document requirement saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/admissions/'.$id.'#documents');
+    }
+
+    public function deleteDocument(string $id,string $requirementId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$requirement=$db->fetch('SELECT * FROM cycle_document_requirements WHERE id=:requirement AND admission_cycle_id=:cycle',['requirement'=>(int)$requirementId,'cycle'=>$cycle['id']]);if(!$requirement)throw new RuntimeException('Document requirement not found.');if((int)$db->scalar('SELECT COUNT(*) FROM application_documents ad JOIN applications a ON a.id=ad.application_id WHERE a.admission_cycle_id=:cycle AND ad.document_type_id=:type',['cycle'=>$cycle['id'],'type'=>$requirement['document_type_id']])>0)throw new RuntimeException('Applicants already uploaded this document type. Set the requirement optional instead of deleting it.');$db->query('DELETE FROM cycle_document_requirements WHERE id=:id',['id'=>$requirement['id']]);AuditService::log('admission_document_requirement_removed','cycle_document_requirement',$requirement['id'],$requirement,[]);Flash::set('success','Document requirement removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#documents');
     }
 
     public function saveFee(string $id, string $programId): never
@@ -238,6 +289,11 @@ final class AdmissionController extends Controller
             AuditService::log('admission_fee_rule_saved','admission_fee_rule',$ruleId,[],$data); Flash::set('success','Fee rule saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/admissions/'.$id.'#fees');
+    }
+
+    public function deleteFee(string $id,string $programId,string $feeId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$fee=$db->fetch('SELECT afr.* FROM admission_fee_rules afr JOIN cycle_programs cp ON cp.id=afr.cycle_program_id WHERE afr.id=:fee AND afr.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['fee'=>(int)$feeId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$fee)throw new RuntimeException('Fee rule not found.');if((int)$db->scalar('SELECT COUNT(*) FROM application_fee_assessments WHERE fee_rule_id=:fee',['fee'=>$fee['id']])>0)throw new RuntimeException('This fee rule already has assessments and cannot be deleted. Set it inactive instead.');$db->query('DELETE FROM admission_fee_rules WHERE id=:id',['id'=>$fee['id']]);AuditService::log('admission_fee_rule_removed','admission_fee_rule',$fee['id'],$fee,[]);Flash::set('success','Draft fee rule removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
     }
 
     private function cycleData(): array
