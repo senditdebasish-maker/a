@@ -178,6 +178,11 @@ if(!$uploadPath||file_put_contents($uploadPath,base64_decode('iVBORw0KGgoAAAANSU
 $applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$uploadPath,'image/png','ci-photo.png','Document uploaded securely');
 $document=$ciDb->query('SELECT * FROM application_documents WHERE application_id='.$newApplicationId.' AND document_type_id=1')->fetch();
 if(!$document||(int)$document['revision_no']!==1||(int)$ciDb->query('SELECT COUNT(*) FROM application_document_versions WHERE application_document_id='.(int)$document['id'])->fetchColumn()!==1)throw new RuntimeException('Protected document upload and immutable revision were not recorded.');
+$invalidUpload=tempnam(sys_get_temp_dir(),'ncp-invalid-');
+if(!$invalidUpload||file_put_contents($invalidUpload,'not an image or PDF')===false)throw new RuntimeException('Could not create invalid upload fixture.');
+$applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$invalidUpload,'image/png','forged-photo.png','file type is not allowed');
+@unlink($invalidUpload);
+if((int)$ciDb->query('SELECT revision_no FROM application_documents WHERE id='.(int)$document['id'])->fetchColumn()!==1)throw new RuntimeException('Rejected upload unexpectedly changed the stored document revision.');
 
 $applicant->get('/student/application?application_id=1','Personal details');
 $applicant->postFileWithCsrf('/student/payments','/student/payments',['amount'=>1000,'reference_number'=>'CI-PAYMENT-REF-1','paid_at'=>date('Y-m-d'),'method'=>'upi'],'proof',$uploadPath,'image/png','ci-payment.png','Payment proof submitted');
