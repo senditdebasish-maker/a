@@ -129,8 +129,25 @@ foreach ($layouts as $layout => $requiredAssets) {
 }
 
 $polish = file_get_contents($cssRoot . '/ui-polish.css') ?: '';
-foreach ([':focus-visible', 'prefers-reduced-motion:reduce', 'forced-colors:active', 'select[multiple]'] as $accessibilityRule) {
+foreach ([':focus-visible', 'prefers-reduced-motion:reduce', 'forced-colors:active', 'select[multiple]', '[data-section-panel][hidden]', '.cms-page-sections'] as $accessibilityRule) {
     if (!str_contains($polish, $accessibilityRule)) $fail("ui-polish.css: expected accessibility/responsive rule missing: {$accessibilityRule}");
+}
+
+foreach ([
+    'resources/views/student/application.php',
+    'resources/views/admin/admissions/show.php',
+    'resources/views/admin/applications/show.php',
+    'resources/views/admin/settings.php',
+] as $workspaceView) {
+    $source = file_get_contents($root . '/' . $workspaceView) ?: '';
+    if (!str_contains($source, 'data-section-workspace') || !str_contains($source, 'data-section-tabs')) $fail("{$workspaceView}: sliding workspace hooks are missing.");
+}
+$javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
+foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: sliding workspace contract is missing {$contract}.");
+}
+foreach (['database/migrations/004_cms_page_builder.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
+    if (!is_file($root . '/' . $builderFile)) $fail("CMS page builder file is missing: {$builderFile}");
 }
 
 if ($failures !== []) {

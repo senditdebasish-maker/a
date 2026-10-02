@@ -70,17 +70,17 @@
     });
   });
 
-  const tabs = one('[data-tabs]');
-  if (tabs) {
+  all('[data-tabs]').forEach((tabs) => {
+    const root = tabs.closest('.card') || tabs.parentElement;
     all('[data-tab]', tabs).forEach((button) => {
       button.addEventListener('click', () => {
         all('[data-tab]', tabs).forEach((item) => item.classList.remove('active'));
-        all('[data-panel]').forEach((panel) => panel.classList.remove('active'));
+        all('[data-panel]', root).forEach((panel) => panel.classList.remove('active'));
         button.classList.add('active');
-        one(`[data-panel="${button.dataset.tab}"]`)?.classList.add('active');
+        one(`[data-panel="${CSS.escape(button.dataset.tab)}"]`, root)?.classList.add('active');
       });
     });
-  }
+  });
 
   all('input[type="file"]').forEach((input) => {
     input.addEventListener('change', () => {
@@ -89,17 +89,91 @@
     });
   });
 
-  const formSections = all('.application-forms > section[id]');
-  const stepLinks = all('.application-steps a');
-  if (formSections.length && 'IntersectionObserver' in window) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        stepLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${entry.target.id}`));
+  const workspaces = all('[data-section-workspace]');
+  workspaces.forEach((workspace) => {
+    const navigation = one('[data-section-tabs]', workspace);
+    if (!navigation) return;
+    const links = all('a[href^="#"]', navigation).filter((link) => {
+      const id = decodeURIComponent(link.hash.slice(1));
+      const panel = document.getElementById(id);
+      return Boolean(id && panel && workspace.contains(panel));
+    });
+    const panels = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1))));
+    if (!links.length) return;
+
+    workspace.classList.add('section-workspace-ready');
+    navigation.setAttribute('role', 'tablist');
+    links.forEach((link, index) => {
+      const panel = panels[index];
+      const tabId = `${panel.id}-tab`;
+      link.id = link.id || tabId;
+      link.setAttribute('role', 'tab');
+      link.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', link.id);
+      panel.setAttribute('tabindex', '0');
+      panel.dataset.sectionPanel = '';
+    });
+
+    let activeIndex = -1;
+    const activate = (id, options = {}) => {
+      const nextIndex = panels.findIndex((panel) => panel.id === id);
+      if (nextIndex < 0) return false;
+      const direction = activeIndex < 0 || nextIndex >= activeIndex ? 'forward' : 'backward';
+      activeIndex = nextIndex;
+      links.forEach((link, index) => {
+        const selected = index === nextIndex;
+        link.classList.toggle('active', selected);
+        link.setAttribute('aria-selected', String(selected));
+        link.setAttribute('tabindex', selected ? '0' : '-1');
+        panels[index].hidden = !selected;
+        panels[index].classList.toggle('active', selected);
+        panels[index].classList.remove('slide-forward', 'slide-backward');
       });
-    }, { rootMargin: '-20% 0px -65% 0px' });
-    formSections.forEach((section) => observer.observe(section));
-  }
+      const panel = panels[nextIndex];
+      panel.classList.add(direction === 'forward' ? 'slide-forward' : 'slide-backward');
+      if (navigation.scrollWidth > navigation.clientWidth) {
+        const link = links[nextIndex];
+        navigation.scrollTo({ left: Math.max(0, link.offsetLeft - navigation.clientWidth / 3), behavior: options.instant ? 'auto' : 'smooth' });
+      }
+      if (options.history === 'push' && location.hash !== `#${encodeURIComponent(id)}`) history.pushState({ section: id }, '', `#${encodeURIComponent(id)}`);
+      else if (options.history === 'replace') history.replaceState({ section: id }, '', `#${encodeURIComponent(id)}`);
+      return true;
+    };
+
+    workspace.addEventListener('click', (event) => {
+      const link = event.target.closest('a[href^="#"]');
+      if (!link || !workspace.contains(link)) return;
+      const id = decodeURIComponent(link.hash.slice(1));
+      if (!panels.some((panel) => panel.id === id)) return;
+      event.preventDefault();
+      activate(id, { history: 'push' });
+    });
+    navigation.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      let next = links.indexOf(document.activeElement);
+      if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = links.length - 1;
+      else next = (next + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + links.length) % links.length;
+      links[next].focus();
+      activate(panels[next].id, { history: 'push' });
+    });
+
+    const syncFromLocation = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      if (activate(id, { instant: true })) return;
+      const target = document.getElementById(id);
+      const containingPanel = target ? panels.find((panel) => panel.contains(target)) : null;
+      if (containingPanel) { activate(containingPanel.id, { instant: true }); return; }
+      const aliasIndex = links.findIndex((link) => (link.dataset.sectionAliases || '').split(',').some((alias) => alias && (id === alias || id.startsWith(alias))));
+      if (aliasIndex >= 0) { activate(panels[aliasIndex].id, { instant: true }); return; }
+      activate(panels[0].id, { history: location.hash ? undefined : 'replace', instant: true });
+    };
+    window.addEventListener('popstate', syncFromLocation);
+    window.addEventListener('hashchange', syncFromLocation);
+    syncFromLocation();
+  });
 
   all('[data-print]').forEach((button) => button.addEventListener('click', () => window.print()));
 

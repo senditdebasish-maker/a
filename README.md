@@ -19,6 +19,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 ## Implemented Release 1
 
 - Responsive pharmacy/science-themed public website with original generated imagery.
+- Accessible one-panel sliding workspaces for applicant steps, admission configuration, application review and settings, including direct hashes and browser back/forward navigation.
 - Public programme, admissions, facilities, faculty, notices, gallery, FAQ, contact, privacy and terms pages.
 - English/Bengali/Hindi interface dictionary foundation and CMS translation records with English fallback.
 - Email-verification registration, password recovery, login throttling and optional staff email OTP.
@@ -29,7 +30,8 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.
 - Applicant dashboard, document status, configured-fee payment proof, receipts, notifications and threaded helpdesk tickets.
 - Admin dashboard, filtered application queue, automated eligibility flags with manual final decisions, document/payment decisions, staff notes, reporting, CSV export, users overview, settings, audit and mail log.
-- CMS CRUD for notices, faculty, facilities, FAQs and gallery images, with manually maintained Bengali/Hindi translations and English fallback.
+- Flexible CMS page builder for every public content route, with ordered branded sections, draft/publish/archive controls, safe media/links, live structured-content feeds, and Bengali/Hindi translations with English fallback.
+- CMS CRUD for notices, faculty, facilities, FAQs and gallery images; programme and admission-cycle records remain authoritative operational data rather than duplicated content.
 - Public notice filtering/detail pages and a staff processing inbox for public contact enquiries.
 - Printable/Dompdf-ready application summary, cover sheet, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
 - Protected local storage, MIME/size checks, random paths, SHA-256 file checksums and permission-checked streaming.
