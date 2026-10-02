@@ -111,15 +111,25 @@ echo "PASS Dompdf application download\n";
 $admin = new BrowserSession($base);
 $admin->login('ci-admin@example.test', 'CI-Temporary#2027', 'Administration');
 $admin->postWithCsrf('/admin/admissions/create','/admin/admissions',['academic_session_id'=>1,'name'=>'CI Editable Cycle','code'=>'CI-EDIT-28','slug'=>'ci-editable-cycle','starts_at'=>'2028-01-01T10:00','ends_at'=>'2028-06-30T23:59','correction_deadline'=>'2028-07-07T23:59','application_number_prefix'=>'CI-APP-28','max_program_preferences'=>3,'closing_soon_hours'=>72,'summary'=>'Editable cycle smoke test','instructions'=>'Complete all configured requirements.','declaration_text'=>'I confirm the submitted information is correct.'],'Draft admission cycle created');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/programs/2/eligibility',['rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'45','message'=>'Minimum marks required','is_blocking'=>1,'sort_order'=>10],'Eligibility rule saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/programs/2/eligibility',['rule_id'=>4,'rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'50','message'=>'Updated minimum marks required','is_blocking'=>1,'sort_order'=>20],'Eligibility rule saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/form-fields',['section_id'=>6,'field_key'=>'ci_choice','label'=>'CI choice','field_type'=>'select','options'=>"yes|Yes\nno|No",'help_text'=>'Editable option test','is_required'=>1,'sort_order'=>10],'Form field saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/form-fields',['field_id'=>26,'section_id'=>6,'field_key'=>'ci_choice','label'=>'Updated CI choice','field_type'=>'radio','options'=>"yes|Yes please\nno|No thanks",'help_text'=>'Updated option test','conditional_rules'=>'{"field":"category","operator":"eq","value":"General"}','is_required'=>1,'sort_order'=>20,'status'=>'active'],'Form field saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/programs/2/seats',['seat_capacity'=>12,'seats'=>[7=>12]],'Seat matrix saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/programs/2/fees',['fee_rule_id'=>3,'fee_type'=>'application_fee','category_code'=>'','label'=>'Updated application fee','amount'=>600,'late_fee_amount'=>50,'refund_policy'=>'Non-refundable after submission.','status'=>'active'],'Fee rule saved');
-$admin->postWithCsrf('/admin/admissions/2','/admin/admissions/2/documents',['document_type_id'=>1,'program_id'=>'','category'=>'','stage'=>'application','sort_order'=>10,'is_required'=>1],'Document requirement saved');
-$admin->get('/admin/admissions/2','Updated CI choice');
+$ciDb=new PDO('mysql:host='.(getenv('DB_HOST')?:'127.0.0.1').';port='.(getenv('DB_PORT')?:'3306').';dbname='.(getenv('DB_DATABASE')?:'ncp_test').';charset=utf8mb4',getenv('DB_USERNAME')?:'root',getenv('DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
+$cyclePath='/admin/admissions/'.$cycleId;
+$admin->postWithCsrf($cyclePath,$cyclePath.'/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
+$cycleProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$cycleId.' AND program_id=1')->fetchColumn();
+$programPath=$cyclePath.'/programs/'.$cycleProgramId;
+$admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'45','message'=>'Minimum marks required','is_blocking'=>1,'sort_order'=>10],'Eligibility rule saved');
+$ruleId=(int)$ciDb->query('SELECT id FROM eligibility_rules WHERE cycle_program_id='.$cycleProgramId.' ORDER BY id DESC LIMIT 1')->fetchColumn();
+$admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_id'=>$ruleId,'rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'50','message'=>'Updated minimum marks required','is_blocking'=>1,'sort_order'=>20],'Eligibility rule saved');
+$sectionId=(int)$ciDb->query("SELECT id FROM admission_form_sections WHERE admission_cycle_id={$cycleId} AND section_key='personal'")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'CI choice','field_type'=>'select','options'=>"yes|Yes\nno|No",'help_text'=>'Editable option test','is_required'=>1,'sort_order'=>10],'Form field saved');
+$fieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key='ci_choice'")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['field_id'=>$fieldId,'section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'Updated CI choice','field_type'=>'radio','options'=>"yes|Yes please\nno|No thanks",'help_text'=>'Updated option test','conditional_rules'=>'{"field":"category","operator":"eq","value":"General"}','is_required'=>1,'sort_order'=>20,'status'=>'active'],'Form field saved');
+$seatId=(int)$ciDb->query('SELECT id FROM seat_matrix WHERE cycle_program_id='.$cycleProgramId.' ORDER BY id LIMIT 1')->fetchColumn();
+$admin->postWithCsrf($cyclePath,$programPath.'/seats',['seat_capacity'=>12,'seats'=>[$seatId=>12]],'Seat matrix saved');
+$feeId=(int)$ciDb->query("SELECT id FROM admission_fee_rules WHERE cycle_program_id={$cycleProgramId} AND fee_type='application_fee' ORDER BY id LIMIT 1")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$programPath.'/fees',['fee_rule_id'=>$feeId,'fee_type'=>'application_fee','category_code'=>'','label'=>'Updated application fee','amount'=>600,'late_fee_amount'=>50,'refund_policy'=>'Non-refundable after submission.','status'=>'active'],'Fee rule saved');
+$admin->postWithCsrf($cyclePath,$cyclePath.'/documents',['document_type_id'=>1,'program_id'=>'','category'=>'','stage'=>'application','sort_order'=>10,'is_required'=>1],'Document requirement saved');
+$admin->get($cyclePath,'Updated CI choice');
 foreach ([
     '/admin/dashboard' => 'Admissions overview', '/admin/admissions' => 'Admission management',
     '/admin/admissions/1' => 'Readiness validation', '/admin/admissions/1/preview' => 'Programme choices',
