@@ -137,7 +137,7 @@ $admin->postWithCsrf($cyclePath,$cyclePath.'/documents',['document_type_id'=>1,'
 $admin->get($cyclePath,'Updated CI choice');
 foreach ([
     '/admin/dashboard' => 'Admissions overview', '/admin/admissions' => 'Admission management',
-    '/admin/admissions/1' => 'Readiness validation', '/admin/admissions/1/preview' => 'Programme choices',
+    '/admin/admissions/1' => 'Publication readiness', '/admin/admissions/1/preview' => 'Programme choices',
     '/admin/applications' => 'Applications', '/admin/reports' => 'Admissions reports',
     '/admin/applications/1' => 'Candidate profile', '/admin/cms' => 'Content management',
     '/admin/cms/notices' => 'Notices records', '/admin/cms/faculty' => 'Faculty directory records',
