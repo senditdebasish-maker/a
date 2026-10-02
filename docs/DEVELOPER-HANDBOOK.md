@@ -1034,16 +1034,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current Release 1 application baseline includes the responsive UI work in commit:
+The current validated Release 1 baseline, including the graphical admin application workflow, is:
 
 ```text
-0b0caf1 Improve Phase 1 responsive interface styling
+28f9090 Align batch smoke assertion with workflow fixture
 ```
 
-The authoritative CI run for that baseline passed PHP 8.1–8.3, Composer, MySQL schema/seeding and the complete HTTP/PDF smoke suite:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install tests on MySQL 8.0 and MariaDB 10.4, including the complete HTTP/PDF suite and graphical-workflow RBAC/batch coverage:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/36897665131
+https://github.com/senditdebasish-maker/a/actions/runs/37044001201
 ```
 
-Future developers should keep CI green and add Phase 2 acceptance coverage rather than weakening existing checks.
+Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.
