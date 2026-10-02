@@ -59,8 +59,8 @@ SQL);
         ];
         foreach ($pages as [$slug, $title, $excerpt]) {
             $m->execute(
-                "INSERT INTO pages (title,slug,eyebrow,excerpt,body,template,hero_image,meta_title,meta_description,status,published_at,created_by,updated_by,created_at,updated_at) VALUES (:title,:slug,'Netaji College of Pharmacy',:excerpt,'','standard',NULL,:title,:excerpt,'published',NOW(),NULL,NULL,NOW(),NOW()) ON DUPLICATE KEY UPDATE slug=VALUES(slug)",
-                ['title' => $title, 'slug' => $slug, 'excerpt' => $excerpt],
+                "INSERT INTO pages (title,slug,eyebrow,excerpt,body,template,hero_image,meta_title,meta_description,status,published_at,created_by,updated_by,created_at,updated_at) VALUES (:title,:slug,'Netaji College of Pharmacy',:excerpt,'','standard',NULL,:meta_title,:meta_description,'published',NOW(),NULL,NULL,NOW(),NOW()) ON DUPLICATE KEY UPDATE slug=VALUES(slug)",
+                ['title' => $title, 'slug' => $slug, 'excerpt' => $excerpt, 'meta_title' => $title, 'meta_description' => $excerpt],
                 "Ensure public page shell {$slug} exists"
             );
         }
