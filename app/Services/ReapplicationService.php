@@ -24,7 +24,7 @@ final class ReapplicationService
             $latest=$db->fetch('SELECT id,status,attempt_no FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1 FOR UPDATE',['user'=>$userId,'cycle'=>$source['admission_cycle_id']]);
             if(!$latest||(int)$latest['id']!==$sourceApplicationId)throw new RuntimeException('A newer application attempt already exists for this admission cycle.');
             $attempt=(int)($latest['attempt_no']??1)+1;
-            $versionId=(int)$db->scalar("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status='published' ORDER BY version_no DESC LIMIT 1",['cycle'=>$source['admission_cycle_id']]);
+            $versionId=(int)$db->scalar("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status IN ('published','seeded_baseline','legacy_import') ORDER BY CASE WHEN status='published' THEN 0 ELSE 1 END,version_no DESC LIMIT 1",['cycle'=>$source['admission_cycle_id']]);
             if($versionId<1)throw new RuntimeException('Published admission configuration is unavailable. Contact Admissions.');
             $now=date('Y-m-d H:i:s');
             $newId=$db->insert('applications',[

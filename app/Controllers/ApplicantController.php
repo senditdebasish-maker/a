@@ -57,7 +57,7 @@ final class ApplicantController extends Controller
             $existing=$db->fetch('SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1 FOR UPDATE',['user'=>Auth::id(),'cycle'=>$cycle['id']]);
             if ($existing) $id=(int)$existing['id'];
             else {
-                $version=$db->fetch("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status='published' ORDER BY version_no DESC LIMIT 1",['cycle'=>$cycle['id']]);
+                $version=$db->fetch("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status IN ('published','seeded_baseline','legacy_import') ORDER BY CASE WHEN status='published' THEN 0 ELSE 1 END,version_no DESC LIMIT 1",['cycle'=>$cycle['id']]);
                 if (!$version) throw new RuntimeException('Published admission configuration is unavailable. Contact Admissions.');
                 $id=$db->insert('applications',['user_id'=>Auth::id(),'admission_cycle_id'=>$cycle['id'],'configuration_version_id'=>$version['id'],'status'=>'draft','current_step'=>1,'completion_percentage'=>10,'eligibility_status'=>'not_evaluated','status_version'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
                 $db->insert('application_status_history',['application_id'=>$id,'from_status'=>null,'to_status'=>'draft','remarks'=>'Application created for published cycle','changed_by'=>Auth::id(),'created_at'=>date('Y-m-d H:i:s')]);
@@ -244,7 +244,7 @@ final class ApplicantController extends Controller
                 if (!$primary) throw new RuntimeException('The first programme preference is no longer available.');
                 $versionId=(int)($locked['configuration_version_id']??0);
                 if (!$versionId) {
-                    $versionId=(int)$db->scalar("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status='published' ORDER BY version_no DESC LIMIT 1",['cycle'=>$locked['admission_cycle_id']]);
+                    $versionId=(int)$db->scalar("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status IN ('published','seeded_baseline','legacy_import') ORDER BY CASE WHEN status='published' THEN 0 ELSE 1 END,version_no DESC LIMIT 1",['cycle'=>$locked['admission_cycle_id']]);
                     if (!$versionId) throw new RuntimeException('Published configuration version is unavailable.');
                 }
                 $number=$locked['application_number']?: (new ApplicationNumberService())->generate($db,$locked,$lockedCycle,$primary);
