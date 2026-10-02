@@ -151,6 +151,22 @@ $sectionId=(int)$ciDb->query("SELECT id FROM admission_form_sections WHERE admis
 $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'CI choice','field_type'=>'select','options'=>"yes|Yes\nno|No",'help_text'=>'Editable option test','is_required'=>1,'sort_order'=>10],'Form field saved');
 $fieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key='ci_choice'")->fetchColumn();
 $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['field_id'=>$fieldId,'section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'Updated CI choice','field_type'=>'radio','options'=>"yes|Yes please\nno|No thanks",'help_text'=>'Updated option test','conditional_rules'=>'{"field":"category","operator":"eq","value":"General"}','is_required'=>1,'sort_order'=>20,'status'=>'active'],'Form field saved');
+$widgetDefinitions=[
+    'text'=>['CI text',''], 'textarea'=>['CI textarea',''], 'email'=>['CI email',''], 'tel'=>['CI telephone',''],
+    'number'=>['CI number',''], 'date'=>['CI date',''], 'select'=>['CI select',"alpha|Alpha\nbeta|Beta"],
+    'checkbox'=>['CI checkbox',"consent|Consent\nupdates|Updates"], 'multiselect'=>['CI multiselect',"red|Red\nblue|Blue\ngreen|Green"],
+];
+$widgetFieldIds=[];$widgetSort=30;
+foreach($widgetDefinitions as $type=>[$label,$options]){
+    $key='ci_'.$type;
+    $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>$key,'label'=>$label,'field_type'=>$type,'options'=>$options,'help_text'=>'CI '.$type.' widget','is_required'=>1,'sort_order'=>$widgetSort,'status'=>'active'],'Form field saved');
+    $widgetFieldIds[$type]=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key=".$ciDb->quote($key))->fetchColumn();
+    if($widgetFieldIds[$type]<1)throw new RuntimeException("{$type} widget was not configured.");
+    $widgetSort+=10;
+}
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'ci_file','label'=>'CI protected file','field_type'=>'file','canonical_binding'=>'document:photo','help_text'=>'Protected file widget','sort_order'=>$widgetSort,'status'=>'active'],'Form field saved');
+$fileFieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key='ci_file' AND field_type='file' AND canonical_binding='document:photo'")->fetchColumn();
+if($fileFieldId<1)throw new RuntimeException('Protected file widget was not configured.');
 $seatId=(int)$ciDb->query('SELECT id FROM seat_matrix WHERE cycle_program_id='.$cycleProgramId.' ORDER BY id LIMIT 1')->fetchColumn();
 $admin->postWithCsrf($cyclePath,$programPath.'/seats',['seat_capacity'=>12,'seats'=>[$seatId=>12]],'Seat matrix saved');
 $feeId=(int)$ciDb->query("SELECT id FROM admission_fee_rules WHERE cycle_program_id={$cycleProgramId} AND fee_type='application_fee' ORDER BY id LIMIT 1")->fetchColumn();
@@ -169,9 +185,23 @@ $public->get('/programs/bachelor-of-pharmacy','register?cycle=ci-editable-cycle&
 $applicant->get('/admissions/ci-editable-cycle/apply','Updated CI choice');
 $newApplicationId=(int)$ciDb->query('SELECT a.id FROM applications a JOIN users u ON u.id=a.user_id WHERE u.email="ishita@demo.test" AND a.admission_cycle_id='.$cycleId)->fetchColumn();
 if($newApplicationId<1)throw new RuntimeException('Cycle-specific Apply Now did not create the expected application.');
-$applicant->postWithCsrf('/student/application','/student/application/save',['section'=>'custom','custom'=>[$fieldId=>'yes']],'Custom details saved');
-$response=$ciDb->query('SELECT value_text FROM application_field_responses WHERE application_id='.$newApplicationId.' AND form_field_id='.$fieldId)->fetchColumn();
-if($response!=='yes')throw new RuntimeException('Dynamic conditional form response was not persisted.');
+$widgetPage=$applicant->request('GET','/student/application');
+foreach(['CI text','CI textarea','CI email','CI telephone','CI number','CI date','CI select','CI checkbox','CI multiselect','CI protected file'] as $label)if($widgetPage['status']!==200||!str_contains($widgetPage['body'],$label))throw new RuntimeException("Configured widget {$label} was not rendered.");
+foreach(['email','tel','number','date'] as $htmlType)if(!str_contains($widgetPage['body'],'type="'.$htmlType.'"'))throw new RuntimeException("Configured {$htmlType} input type was not rendered.");
+if(!str_contains($widgetPage['body'],'type="radio" name="custom['.$fieldId.']"')||!str_contains($widgetPage['body'],'type="checkbox" name="custom['.$widgetFieldIds['checkbox'].'][]"')||!str_contains($widgetPage['body'],'<select name="custom['.$widgetFieldIds['multiselect'].'][]" multiple'))throw new RuntimeException('Radio, checkbox, or multiselect controls were not rendered with the configured widget semantics.');
+if(!str_contains($widgetPage['body'],'<textarea')||!str_contains($widgetPage['body'],'Use the protected document section below'))throw new RuntimeException('Textarea or protected file guidance was not rendered.');
+$widgetValues=['text'=>'Widget text','textarea'=>"Widget textarea\nsecond line",'email'=>'widget@example.test','tel'=>'+91 9876543210','number'=>'42.5','date'=>'2027-01-15','select'=>'beta','checkbox'=>['consent','updates'],'multiselect'=>['red','green']];
+$customPayload=[$fieldId=>'yes'];foreach($widgetValues as $type=>$value)$customPayload[$widgetFieldIds[$type]]=$value;
+$applicant->postWithCsrf('/student/application','/student/application/save',['section'=>'custom','custom'=>$customPayload],'Custom details saved');
+$storedResponses=$ciDb->query('SELECT form_field_id,value_text,value_json FROM application_field_responses WHERE application_id='.$newApplicationId)->fetchAll(PDO::FETCH_UNIQUE|PDO::FETCH_ASSOC);
+if(($storedResponses[$fieldId]['value_text']??null)!=='yes')throw new RuntimeException('Dynamic conditional radio response was not persisted.');
+foreach($widgetValues as $type=>$expected){
+    $stored=$storedResponses[$widgetFieldIds[$type]]??null;if(!$stored)throw new RuntimeException("{$type} widget response was not persisted.");
+    $actual=is_array($expected)?json_decode((string)$stored['value_json'],true):$stored['value_text'];
+    if($actual!==$expected)throw new RuntimeException("{$type} widget response changed during persistence.");
+}
+if(isset($storedResponses[$fileFieldId]))throw new RuntimeException('Protected file widget was incorrectly persisted as an ordinary custom response.');
+echo "PASS every configured admission form widget\n";
 
 $uploadPath=tempnam(sys_get_temp_dir(),'ncp-upload-');
 if(!$uploadPath||file_put_contents($uploadPath,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='))===false)throw new RuntimeException('Could not create upload fixture.');
@@ -183,6 +213,15 @@ if(!$invalidUpload||file_put_contents($invalidUpload,'not an image or PDF')===fa
 $applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$invalidUpload,'image/png','forged-photo.png','file type is not allowed');
 @unlink($invalidUpload);
 if((int)$ciDb->query('SELECT revision_no FROM application_documents WHERE id='.(int)$document['id'])->fetchColumn()!==1)throw new RuntimeException('Rejected upload unexpectedly changed the stored document revision.');
+$ciDb->exec('UPDATE document_types SET max_size_mb=1 WHERE id=1');
+$oversizedUpload=tempnam(sys_get_temp_dir(),'ncp-oversized-');
+$oversizedHandle=$oversizedUpload?fopen($oversizedUpload,'wb'):false;
+if(!$oversizedHandle||fwrite($oversizedHandle,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='))===false||!ftruncate($oversizedHandle,1024*1024+1)){if($oversizedHandle)fclose($oversizedHandle);throw new RuntimeException('Could not create oversized upload fixture.');}
+fclose($oversizedHandle);
+$applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$oversizedUpload,'image/png','oversized-photo.png','no larger than 1 MB');
+@unlink($oversizedUpload);$ciDb->exec('UPDATE document_types SET max_size_mb=5 WHERE id=1');
+if((int)$ciDb->query('SELECT revision_no FROM application_documents WHERE id='.(int)$document['id'])->fetchColumn()!==1)throw new RuntimeException('Oversized upload unexpectedly changed the stored document revision.');
+echo "PASS upload maximum-size boundary\n";
 
 $applicant->get('/student/application?application_id=1','Personal details');
 $applicant->postFileWithCsrf('/student/payments','/student/payments',['amount'=>1000,'reference_number'=>'CI-PAYMENT-REF-1','paid_at'=>date('Y-m-d'),'method'=>'upi'],'proof',$uploadPath,'image/png','ci-payment.png','Payment proof submitted');
@@ -205,6 +244,34 @@ if(($copy['status']??'')!=='draft'||(int)$copy['configuration_version']!==0||(in
 $sourceFieldCount=(int)$ciDb->query('SELECT COUNT(*) FROM admission_form_fields WHERE admission_cycle_id='.$cycleId)->fetchColumn();
 $copyFieldCount=(int)$ciDb->query('SELECT COUNT(*) FROM admission_form_fields WHERE admission_cycle_id='.$copyId)->fetchColumn();
 if($sourceFieldCount!==$copyFieldCount)throw new RuntimeException('Cycle duplication did not preserve form configuration.');
+$copyPath='/admin/admissions/'.$copyId;
+$copyProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$copyId.' AND program_id=1')->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/form-fields/'.$fieldId.'/delete',[],'Form field not found');
+$admin->postWithCsrf($copyPath,$copyPath.'/form-sections',['section_key'=>'ci_disposable','title'=>'CI disposable section','description'=>'Deletion endpoint test','sort_order'=>900,'status'=>'active'],'Form section saved');
+$disposableSectionId=(int)$ciDb->query("SELECT id FROM admission_form_sections WHERE admission_cycle_id={$copyId} AND section_key='ci_disposable'")->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/form-fields',['section_id'=>$disposableSectionId,'field_key'=>'ci_disposable_field','label'=>'CI disposable field','field_type'=>'text','sort_order'=>1,'status'=>'active'],'Form field saved');
+$disposableFieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$copyId} AND field_key='ci_disposable_field'")->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/form-fields/'.$disposableFieldId.'/delete',[],'Draft form field removed');
+$admin->postWithCsrf($copyPath,$copyPath.'/form-sections/'.$disposableSectionId.'/delete',[],'Empty form section removed');
+$copyRuleId=(int)$ciDb->query('SELECT id FROM eligibility_rules WHERE cycle_program_id='.$copyProgramId.' ORDER BY id LIMIT 1')->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$copyProgramId.'/eligibility/'.$copyRuleId.'/delete',[],'Eligibility rule removed');
+$admin->postWithCsrf($copyPath,$copyPath.'/documents',['document_type_id'=>2,'program_id'=>'','category'=>'','stage'=>'application','sort_order'=>910],'Document requirement saved');
+$copyRequirementId=(int)$ciDb->query('SELECT id FROM cycle_document_requirements WHERE admission_cycle_id='.$copyId.' AND document_type_id=2')->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/documents/'.$copyRequirementId.'/delete',[],'Document requirement removed');
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$copyProgramId.'/fees',['fee_type'=>'application_fee','category_code'=>'OBC-A','label'=>'CI disposable fee','amount'=>1,'late_fee_amount'=>0,'status'=>'active'],'Fee rule saved');
+$copyFeeId=(int)$ciDb->query("SELECT id FROM admission_fee_rules WHERE cycle_program_id={$copyProgramId} AND category_code='OBC-A' ORDER BY id DESC LIMIT 1")->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$copyProgramId.'/fees/'.$copyFeeId.'/delete',[],'Draft fee rule removed');
+$copySeatId=(int)$ciDb->query('SELECT id FROM seat_matrix WHERE cycle_program_id='.$copyProgramId.' ORDER BY id LIMIT 1')->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$copyProgramId.'/seats',['seat_capacity'=>12,'seats'=>[$copySeatId=>10],'new_category'=>'OBC-A','new_quota'=>'state','new_seats'=>2],'Seat matrix saved');
+$copyDisposableSeatId=(int)$ciDb->query("SELECT id FROM seat_matrix WHERE cycle_program_id={$copyProgramId} AND category='OBC-A' AND quota='state'")->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$copyProgramId.'/seats/'.$copyDisposableSeatId.'/delete',[],'Seat row removed and programme capacity recalculated');
+$admin->postWithCsrf('/admin/admissions','/admin/admissions/programs',['name'=>'CI Disposable Programme','code'=>'CIDISP','award_type'=>'Certificate','duration_years'=>1,'total_semesters'=>2,'summary'=>'Delete endpoint fixture'],'Programme added to the catalogue');
+$disposableProgramId=(int)$ciDb->query("SELECT id FROM programs WHERE code='CIDISP'")->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs',['program_id'=>$disposableProgramId,'seat_capacity'=>1,'application_fee'=>0,'admission_fee'=>0,'minimum_marks_general'=>0,'minimum_marks_reserved'=>0,'min_age'=>0,'max_age'=>99,'accepted_entrance_exams'=>''],'Programme added');
+$disposableCycleProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$copyId.' AND program_id='.$disposableProgramId)->fetchColumn();
+$admin->postWithCsrf($copyPath,$copyPath.'/programs/'.$disposableCycleProgramId.'/delete',[],'Programme and its draft rules, seats and fees were removed');
+if((int)$ciDb->query('SELECT COUNT(*) FROM admission_form_sections WHERE id='.$disposableSectionId)->fetchColumn()!==0||(int)$ciDb->query('SELECT COUNT(*) FROM cycle_document_requirements WHERE id='.$copyRequirementId)->fetchColumn()!==0||(int)$ciDb->query('SELECT COUNT(*) FROM cycle_programs WHERE id='.$disposableCycleProgramId)->fetchColumn()!==0)throw new RuntimeException('One or more guarded draft delete endpoints did not remove the intended record.');
+echo "PASS guarded draft configuration delete matrix\n";
 $public->expectStatus('/admissions/ci-editable-cycle',404);
 $public->expectStatus('/admissions/ci-duplicated-cycle',404);
 $admin->get('/admin/reports?cycle='.$copyId,'No records for this filter.');
@@ -221,9 +288,15 @@ foreach ([
     '/admin/users' => 'Users & roles', '/admin/roles' => 'Roles & permissions',
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
+$formulaUserId=(int)$ciDb->query('SELECT user_id FROM applications WHERE admission_cycle_id=1 ORDER BY id LIMIT 1')->fetchColumn();
+$originalFirstName=(string)$ciDb->query('SELECT first_name FROM users WHERE id='.$formulaUserId)->fetchColumn();
+$setFormulaName=$ciDb->prepare('UPDATE users SET first_name=? WHERE id=?');$setFormulaName->execute(['=2+2',$formulaUserId]);
 $export=$admin->request('GET','/admin/applications/export?cycle=1');
+$formulaEscaped=str_contains($export['body'],"'=2+2");
+$setFormulaName->execute([$originalFirstName,$formulaUserId]);
 if($export['status']!==200||!str_contains($export['content_type'],'text/csv')||!str_contains($export['body'],'Application No.')||!str_contains($export['body'],'NCP-APP-2027'))throw new RuntimeException('Filtered application CSV export failed.');
-echo "PASS filtered application CSV export\n";
+if(!$formulaEscaped)throw new RuntimeException('Spreadsheet formula injection was not escaped in the application CSV.');
+echo "PASS filtered application CSV export and formula escaping\n";
 
 $reviewer=new BrowserSession($base);
 $reviewer->login('reviewer@demo.test','DemoReviewer#2027','Administration');

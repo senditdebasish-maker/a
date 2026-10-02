@@ -28,10 +28,19 @@ jobs:
         run: find app config database public resources routes scripts -name '*.php' -print0 | xargs -0 -n1 php -l
 
   database-smoke:
+    name: database-smoke (${{ matrix.database.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database:
+          - name: MySQL 8.0
+            image: mysql:8.0
+          - name: MariaDB 10.4
+            image: mariadb:10.4
     services:
       mysql:
-        image: mysql:8.0
+        image: ${{ matrix.database.image }}
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: ncp_test
