@@ -221,6 +221,9 @@ foreach ([
     '/admin/users' => 'Users & roles', '/admin/roles' => 'Roles & permissions',
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
+$export=$admin->request('GET','/admin/applications/export?cycle=1');
+if($export['status']!==200||!str_contains($export['content_type'],'text/csv')||!str_contains($export['body'],'Application No.')||!str_contains($export['body'],'NCP-APP-2027'))throw new RuntimeException('Filtered application CSV export failed.');
+echo "PASS filtered application CSV export\n";
 
 $reviewer=new BrowserSession($base);
 $reviewer->login('reviewer@demo.test','DemoReviewer#2027','Administration');
