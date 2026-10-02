@@ -68,7 +68,11 @@ final class BrowserSession
     {
         $page=$this->request('GET',$tokenPage);if($page['status']!==200||!preg_match('/name="_token" value="([^"]+)"/',$page['body'],$match))throw new RuntimeException("CSRF token not found on {$tokenPage}.");
         $response=$this->request('POST',$action,['_token'=>html_entity_decode($match[1])]+$data);
-        if($response['status']!==200||!str_contains($response['body'],$needle))throw new RuntimeException("POST {$action} failed ({$response['status']}); expected text: {$needle}");
+        if($response['status']!==200||!str_contains($response['body'],$needle)){
+            preg_match('/<div class="alert[^"]*">(.*?)<button/is',$response['body'],$alert);
+            $detail=trim(html_entity_decode(strip_tags($alert[1]??'')));
+            throw new RuntimeException("POST {$action} failed ({$response['status']}); expected text: {$needle}".($detail!==''?"; response alert: {$detail}":''));
+        }
         echo "PASS POST {$action}\n";
     }
 
