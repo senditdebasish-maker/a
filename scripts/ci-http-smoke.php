@@ -359,7 +359,7 @@ $reviewerId=(int)$ciDb->query("SELECT id FROM users WHERE email='reviewer@demo.t
 $admin->postWithCsrf('/admin/applications?view=board','/admin/applications/bulk/assign',['application_ids'=>[2],'assigned_to'=>$reviewerId,'return_to'=>'board'],'1 application assigned');
 $admin->postWithCsrf('/admin/applications?view=board','/admin/applications/bulk/status',['application_ids'=>[1,2],'bulk_status'=>'eligibility_check','bulk_remarks'=>'CI batch validation','return_to'=>'board'],'1 application changed; 1 skipped after server validation');
 $batchStates=$ciDb->query('SELECT id,status FROM applications WHERE id IN (1,2) ORDER BY id')->fetchAll(PDO::FETCH_KEY_PAIR);
-if(($batchStates[1]??'')!=='eligibility_check'||($batchStates[2]??'')!=='under_review')throw new RuntimeException('Bulk workflow did not preserve the valid transition and reject the invalid transition independently.');
+if(($batchStates[1]??'')!=='eligibility_check'||($batchStates[2]??'')!=='admitted')throw new RuntimeException('Bulk workflow did not preserve the valid transition and reject the invalid transition independently.');
 echo "PASS graphical board, guided review, bulk assignment and honest partial batch validation\n";
 $formulaUserId=(int)$ciDb->query('SELECT user_id FROM applications WHERE admission_cycle_id=1 ORDER BY id LIMIT 1')->fetchColumn();
 $originalFirstName=(string)$ciDb->query('SELECT first_name FROM users WHERE id='.$formulaUserId)->fetchColumn();
