@@ -107,6 +107,8 @@ jobs:
           sed -i 's/DB_DATABASE=ncp_upgrade/DB_DATABASE=ncp_test/' .env
       - name: Exercise admission workflow invariants
         run: php scripts/ci-admission-workflow.php
+      - name: Exercise release system integrity checks
+        run: php scripts/ci-system-integrity.php
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private
