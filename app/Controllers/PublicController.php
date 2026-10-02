@@ -19,25 +19,27 @@ final class PublicController extends Controller
         $notices = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status = 'published' AND audience = 'public' AND (expires_at IS NULL OR expires_at >= :today) ORDER BY is_pinned DESC, published_at DESC LIMIT 3", ['today' => date('Y-m-d')]));
         $program = $db->fetch("SELECT * FROM programs WHERE status = 'active' ORDER BY id LIMIT 1");
         $admissionCycles = (new AdmissionCycleService())->publicCycles(true);
-        $this->view('public/home', compact('notices', 'program', 'admissionCycles') + ['title' => 'Learn the science. Lead the change.']);
+        $cms = $this->cmsData('home');
+        $this->view('public/home', compact('notices', 'program', 'admissionCycles') + ['title' => $cms['cmsPage']['meta_title'] ?? 'Learn the science. Lead the change.'] + $cms);
     }
 
     public function page(string $slug): void
     {
-        $page = Database::get()->fetch("SELECT * FROM pages WHERE slug = :slug AND status = 'published' LIMIT 1", ['slug' => $slug]);
-        if (!$page) {
+        $cms = $this->cmsData($slug);
+        if (!$cms['cmsPage']) {
             http_response_code(404);
             $this->view('errors/404', ['title' => 'Page not found']);
             return;
         }
-        $page = $this->localize('page', $page);
-        $this->view('public/page', ['page' => $page, 'title' => $page['title'], 'slug' => $slug]);
+        $page = $cms['cmsPage'];
+        $this->view('public/page', ['page' => $page, 'title' => $page['meta_title'] ?: $page['title'], 'slug' => $slug] + $cms);
     }
 
     public function programs(): void
     {
         $programs = Database::get()->all("SELECT * FROM programs WHERE status = 'active' ORDER BY sort_order, name");
-        $this->view('public/programs', ['programs' => $programs, 'title' => 'Pharmacy programmes']);
+        $cms = $this->cmsData('programs');
+        $this->view('public/programs', ['programs' => $programs, 'title' => $cms['cmsPage']['meta_title'] ?? 'Pharmacy programmes'] + $cms);
     }
 
     public function program(string $slug): void
@@ -53,13 +55,15 @@ final class PublicController extends Controller
             $configured = Database::get()->fetch('SELECT seat_capacity,application_fee,minimum_marks_general,minimum_marks_reserved FROM cycle_programs WHERE admission_cycle_id=:cycle AND program_id=:program AND status=:status',['cycle'=>$candidate['id'],'program'=>$program['id'],'status'=>'active']);
             if ($configured) { $cycle=$candidate+$configured; break; }
         }
-        $this->view('public/program', ['program' => $program, 'cycle' => $cycle, 'title' => $program['name']]);
+        $cms = $this->cmsData('programs');
+        $this->view('public/program', ['program' => $program, 'cycle' => $cycle, 'title' => $program['name']] + $cms);
     }
 
     public function admissions(): void
     {
         $cycles=(new AdmissionCycleService())->publicCycles(true);
-        $this->view('public/admissions',['cycles'=>$cycles,'title'=>'Admissions']);
+        $cms=$this->cmsData('admissions');
+        $this->view('public/admissions',['cycles'=>$cycles,'title'=>$cms['cmsPage']['meta_title']??'Admissions']+$cms);
     }
 
     public function admission(string $slug): void
@@ -74,7 +78,8 @@ final class PublicController extends Controller
         $requirements=$db->all("SELECT dt.name,dt.description,dt.allowed_mimes,dt.max_size_mb,cdr.is_required,cdr.stage,p.name AS program_name,cdr.category
             FROM cycle_document_requirements cdr JOIN document_types dt ON dt.id=cdr.document_type_id LEFT JOIN programs p ON p.id=cdr.program_id
             WHERE cdr.admission_cycle_id=:cycle ORDER BY cdr.sort_order,dt.name",['cycle'=>$cycle['id']]);
-        $this->view('public/admission-detail',compact('cycle','programs','requirements')+['title'=>$cycle['name']]);
+        $cms=$this->cmsData('admissions');
+        $this->view('public/admission-detail',compact('cycle','programs','requirements')+['title'=>$cycle['name']]+$cms);
     }
 
     public function admissionProspectus(string $slug): never
@@ -94,13 +99,15 @@ final class PublicController extends Controller
     public function facilities(): void
     {
         $facilities = $this->localizeMany('facility', Database::get()->all("SELECT * FROM facilities WHERE status = 'published' ORDER BY sort_order, name"));
-        $this->view('public/facilities', ['facilities' => $facilities, 'title' => 'Learning spaces']);
+        $cms=$this->cmsData('facilities');
+        $this->view('public/facilities', ['facilities' => $facilities, 'title' => $cms['cmsPage']['meta_title']??'Learning spaces']+$cms);
     }
 
     public function faculty(): void
     {
         $faculty = $this->localizeMany('faculty', Database::get()->all("SELECT f.*, d.name AS department_name FROM faculty f LEFT JOIN departments d ON d.id = f.department_id WHERE f.status = 'active' ORDER BY f.sort_order, f.name"));
-        $this->view('public/faculty', ['faculty' => $faculty, 'title' => 'Meet our faculty']);
+        $cms=$this->cmsData('faculty');
+        $this->view('public/faculty', ['faculty' => $faculty, 'title' => $cms['cmsPage']['meta_title']??'Meet our faculty']+$cms);
     }
 
     public function notices(): void
@@ -118,7 +125,8 @@ final class PublicController extends Controller
             $params += ['search_title' => $term, 'search_excerpt' => $term, 'search_body' => $term];
         }
         $notices = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE {$where} ORDER BY is_pinned DESC, published_at DESC LIMIT 100", $params));
-        $this->view('public/notices', compact('notices', 'categories', 'category', 'search') + ['title' => 'Notices & announcements']);
+        $cms=$this->cmsData('notices');
+        $this->view('public/notices', compact('notices', 'categories', 'category', 'search') + ['title' => $cms['cmsPage']['meta_title']??'Notices & announcements']+$cms);
     }
 
     public function notice(string $slug): void
@@ -128,24 +136,28 @@ final class PublicController extends Controller
         if (!$notice) { http_response_code(404); $this->view('errors/404', ['title' => 'Notice not found']); return; }
         $notice = $this->localize('notice', $notice);
         $related = $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status = 'published' AND audience = 'public' AND id <> :id AND category = :category ORDER BY published_at DESC LIMIT 3", ['id' => $notice['id'], 'category' => $notice['category']]));
-        $this->view('public/notice', compact('notice', 'related') + ['title' => $notice['title']]);
+        $cms=$this->cmsData('notices');
+        $this->view('public/notice', compact('notice', 'related') + ['title' => $notice['title']]+$cms);
     }
 
     public function gallery(): void
     {
         $items = $this->localizeMany('gallery_item', Database::get()->all("SELECT * FROM gallery_items WHERE status = 'published' ORDER BY sort_order, created_at DESC"));
-        $this->view('public/gallery', ['items' => $items, 'title' => 'Life at Netaji']);
+        $cms=$this->cmsData('gallery');
+        $this->view('public/gallery', ['items' => $items, 'title' => $cms['cmsPage']['meta_title']??'Life at Netaji']+$cms);
     }
 
     public function faq(): void
     {
         $faqs = $this->localizeMany('faq', Database::get()->all("SELECT * FROM faqs WHERE status = 'published' ORDER BY category, sort_order"));
-        $this->view('public/faq', ['faqs' => $faqs, 'title' => 'Frequently asked questions']);
+        $cms=$this->cmsData('faq');
+        $this->view('public/faq', ['faqs' => $faqs, 'title' => $cms['cmsPage']['meta_title']??'Frequently asked questions']+$cms);
     }
 
     public function contact(): void
     {
-        $this->view('public/contact', ['title' => 'Talk to us']);
+        $cms=$this->cmsData('contact');
+        $this->view('public/contact', ['title' => $cms['cmsPage']['meta_title']??'Talk to us']+$cms);
     }
 
     public function submitContact(): never
@@ -179,6 +191,40 @@ final class PublicController extends Controller
         $target = $_SERVER['HTTP_REFERER'] ?? url();
         header('Location: ' . $target);
         exit;
+    }
+
+    private function cmsData(string $slug): array
+    {
+        $db = Database::get();
+        $siteSettings = [];
+        foreach ($db->all("SELECT key_name,value FROM settings WHERE key_name IN ('college_name','college_short_name','college_email','college_phone','college_address','privacy_contact')") as $setting) $siteSettings[$setting['key_name']] = (string) $setting['value'];
+        $page = $db->fetch("SELECT * FROM pages WHERE slug=:slug AND status='published' LIMIT 1", ['slug'=>$slug]);
+        if (!$page) return ['cmsPage'=>null,'cmsSections'=>[],'siteSettings'=>$siteSettings];
+        $page = $this->localize('page', $page);
+        $sections = $db->all("SELECT * FROM page_sections WHERE page_id=:page AND status='published' ORDER BY sort_order,id", ['page'=>$page['id']]);
+        $sections = $this->localizeMany('page_section', $sections);
+        foreach ($sections as &$section) {
+            $items = json_decode((string)($section['items_json'] ?? ''), true);
+            $section['items'] = is_array($items) ? array_values(array_filter($items, 'is_array')) : [];
+            $section['feed_items'] = $section['section_type'] === 'module_feed' ? $this->moduleFeed((string)$section['module_key']) : [];
+        }
+        unset($section);
+        return ['cmsPage'=>$page,'cmsSections'=>$sections,'siteSettings'=>$siteSettings,'metaDescription'=>$page['meta_description'] ?: $page['excerpt']];
+    }
+
+    private function moduleFeed(string $module): array
+    {
+        $db = Database::get();
+        return match ($module) {
+            'programs' => $db->all("SELECT * FROM programs WHERE status='active' ORDER BY sort_order,name LIMIT 12"),
+            'admissions' => array_slice((new AdmissionCycleService())->publicCycles(true), 0, 12),
+            'notices' => $this->localizeMany('notice', $db->all("SELECT * FROM notices WHERE status='published' AND audience='public' AND (expires_at IS NULL OR expires_at>=:today) ORDER BY is_pinned DESC,published_at DESC LIMIT 6", ['today'=>date('Y-m-d')])),
+            'facilities' => $this->localizeMany('facility', $db->all("SELECT * FROM facilities WHERE status='published' ORDER BY sort_order,name LIMIT 12")),
+            'faculty' => $this->localizeMany('faculty', $db->all("SELECT f.*,d.name AS department_name FROM faculty f LEFT JOIN departments d ON d.id=f.department_id WHERE f.status='active' ORDER BY f.sort_order,f.name LIMIT 12")),
+            'gallery' => $this->localizeMany('gallery_item', $db->all("SELECT * FROM gallery_items WHERE status='published' ORDER BY sort_order,created_at DESC LIMIT 12")),
+            'faqs' => $this->localizeMany('faq', $db->all("SELECT * FROM faqs WHERE status='published' ORDER BY category,sort_order LIMIT 20")),
+            default => [],
+        };
     }
 
     private function localizeMany(string $type, array $records): array

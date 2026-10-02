@@ -121,7 +121,7 @@ foreach ([
 }
 echo "PASS production stylesheet delivery\n";
 foreach ([
-    '/' => 'Learn the science', '/programs' => 'Pharmacy programmes', '/admissions' => 'Your next step',
+    '/' => 'Learn the science', '/programs' => 'Study the science', '/admissions' => 'Your next step',
     '/admissions/undergraduate-admissions-2027-28' => 'Choose and rank your preferences',
     '/facilities' => 'Spaces that invite', '/faculty' => 'Guidance shaped', '/notices' => 'Notices &',
     '/notices/admissions-cycle-2027' => 'Applications for 2027', '/gallery' => 'Learning, belonging',
@@ -150,6 +150,31 @@ $liveEnd=date('Y-m-d\TH:i',strtotime('+30 days'));
 $correctionEnd=date('Y-m-d\TH:i',strtotime('+37 days'));
 $admin->postWithCsrf('/admin/admissions/create','/admin/admissions',['academic_session_id'=>1,'name'=>'CI Editable Cycle','code'=>'CI-EDIT-28','slug'=>'ci-editable-cycle','starts_at'=>$liveStart,'ends_at'=>$liveEnd,'correction_deadline'=>$correctionEnd,'application_number_prefix'=>'CI-APP-28','max_program_preferences'=>3,'closing_soon_hours'=>72,'summary'=>'Editable cycle smoke test','instructions'=>'Complete all configured requirements.','declaration_text'=>'I confirm the submitted information is correct.'],'Draft admission cycle created');
 $ciDb=new PDO('mysql:host='.(getenv('DB_HOST')?:'127.0.0.1').';port='.(getenv('DB_PORT')?:'3306').';dbname='.(getenv('DB_DATABASE')?:'ncp_test').';charset=utf8mb4',getenv('DB_USERNAME')?:'root',getenv('DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$aboutPageId=(int)$ciDb->query("SELECT id FROM pages WHERE slug='about'")->fetchColumn();
+$aboutEditor='/admin/cms/pages/'.$aboutPageId;
+$admin->get($aboutEditor,'Flexible page builder');
+$admin->postWithCsrf($aboutEditor,$aboutEditor.'/sections',[
+    'section_type'=>'feature_grid','style_variant'=>'soft','section_status'=>'published','section_key'=>'ci-learning-outcomes','sort_order'=>30,
+    'section_eyebrow'=>'CI builder','section_title'=>'CI learning outcomes','section_body'=>'This content comes from the reusable page section database.',
+    'items'=>"Scientific depth | Evidence-led learning | facilities\nProfessional care | Ethical practice | faculty",'link_label'=>'Explore programmes','link_url'=>'programs',
+    'bn_title'=>'সিআই শেখার ফলাফল','bn_body'=>'অনুবাদ পরীক্ষার বিষয়বস্তু','bn_items'=>'বিজ্ঞান | প্রমাণভিত্তিক শিক্ষা | facilities',
+], 'Page section added');
+$builderSectionId=(int)$ciDb->query("SELECT id FROM page_sections WHERE page_id={$aboutPageId} AND section_key='ci-learning-outcomes'")->fetchColumn();
+if($builderSectionId<1)throw new RuntimeException('CMS page builder did not persist the section.');
+$translationJson=(string)$ciDb->query("SELECT fields_json FROM content_translations WHERE entity_type='page_section' AND entity_id={$builderSectionId} AND locale='bn'")->fetchColumn();
+if(!str_contains($translationJson,'সিআই শেখার ফলাফল'))throw new RuntimeException('CMS section translation was not persisted.');
+$public->get('/about','CI learning outcomes');
+$admin->postWithCsrf($aboutEditor,$aboutEditor.'/sections/'.$builderSectionId,[
+    'section_type'=>'call_to_action','style_variant'=>'teal','section_status'=>'published','section_key'=>'ci-learning-outcomes','sort_order'=>30,
+    'section_eyebrow'=>'CI builder','section_title'=>'CI learning outcomes updated','section_body'=>'The same section now uses a different branded layout.','link_label'=>'Review admissions','link_url'=>'admissions',
+], 'Page section updated');
+$public->get('/about','CI learning outcomes updated');
+$admin->postWithCsrf($aboutEditor,$aboutEditor.'/sections/'.$builderSectionId.'/move',['direction'=>'up'],'CI learning outcomes updated');
+$admin->postWithCsrf($aboutEditor,$aboutEditor.'/sections/'.$builderSectionId.'/archive',[],'Section archived without deleting its content');
+if((string)$ciDb->query('SELECT status FROM page_sections WHERE id='.$builderSectionId)->fetchColumn()!=='archived')throw new RuntimeException('CMS section archive did not preserve the row as archived.');
+$archivedPublic=$public->request('GET','/about');
+if($archivedPublic['status']!==200||str_contains($archivedPublic['body'],'CI learning outcomes updated'))throw new RuntimeException('Archived CMS section remained public.');
+echo "PASS CMS page section create, translate, update, reorder, render and archive\n";
 $cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
 $cyclePath='/admin/admissions/'.$cycleId;
 $admin->postWithCsrf($cyclePath,$cyclePath.'/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
@@ -327,6 +352,15 @@ foreach ([
     '/admin/users' => 'Users & roles', '/admin/roles' => 'Roles & permissions',
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
+$admin->get('/admin/applications?view=board','Application lifecycle board');
+$admin->get('/admin/applications?view=table','records on this page');
+$admin->get('/admin/applications/1','Decision readiness');
+$reviewerId=(int)$ciDb->query("SELECT id FROM users WHERE email='reviewer@demo.test'")->fetchColumn();
+$admin->postWithCsrf('/admin/applications?view=board','/admin/applications/bulk/assign',['application_ids'=>[2],'assigned_to'=>$reviewerId,'return_to'=>'board'],'1 application assigned');
+$admin->postWithCsrf('/admin/applications?view=board','/admin/applications/bulk/status',['application_ids'=>[1,2],'bulk_status'=>'eligibility_check','bulk_remarks'=>'CI batch validation','return_to'=>'board'],'1 application changed; 1 skipped after server validation');
+$batchStates=$ciDb->query('SELECT id,status FROM applications WHERE id IN (1,2) ORDER BY id')->fetchAll(PDO::FETCH_KEY_PAIR);
+if(($batchStates[1]??'')!=='eligibility_check'||($batchStates[2]??'')!=='admitted')throw new RuntimeException('Bulk workflow did not preserve the valid transition and reject the invalid transition independently.');
+echo "PASS graphical board, guided review, bulk assignment and honest partial batch validation\n";
 $formulaUserId=(int)$ciDb->query('SELECT user_id FROM applications WHERE admission_cycle_id=1 ORDER BY id LIMIT 1')->fetchColumn();
 $originalFirstName=(string)$ciDb->query('SELECT first_name FROM users WHERE id='.$formulaUserId)->fetchColumn();
 $setFormulaName=$ciDb->prepare('UPDATE users SET first_name=? WHERE id=?');$setFormulaName->execute(['=2+2',$formulaUserId]);
@@ -339,7 +373,11 @@ echo "PASS filtered application CSV export and formula escaping\n";
 
 $reviewer=new BrowserSession($base);
 $reviewer->login('reviewer@demo.test','DemoReviewer#2027','Administration');
-$reviewer->get('/admin/applications/2','Candidate profile');
+$reviewer->get('/admin/applications/2','Decision readiness');
+$reviewerBoard=$reviewer->request('GET','/admin/applications?view=board');
+if($reviewerBoard['status']!==200||!str_contains($reviewerBoard['body'],'NCP-APP-2027-000002')||str_contains($reviewerBoard['body'],'NCP-APP-2027-000001'))throw new RuntimeException('Reviewer board scope exposed an application outside the reviewer assignment.');
+$reviewer->postExpectStatus('/admin/applications?view=board','/admin/applications/bulk/assign',['application_ids'=>[2],'assigned_to'=>$reviewerId],403);
+$reviewer->postExpectStatus('/admin/applications?view=board','/admin/applications/bulk/status',['application_ids'=>[2],'bulk_status'=>'approved'],403);
 $reviewer->expectStatus('/admin/applications/1',403);
 $reviewer->expectStatus('/admin/applications/1/generated/application',403);
 $reviewer->expectStatus('/admin/admissions/create',403);

@@ -222,9 +222,9 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes a rollback/forward-fix document; see `database/migrations/002_admission_management.rollback.md` and `database/migrations/003_submission_snapshot_revisions.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, and `database/migrations/004_cms_page_builder.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
-## 8. Current database map (64 tables)
+## 8. Current database map (65 tables)
 
 ### Identity, access and configuration
 
@@ -292,6 +292,7 @@ These are shared masters. Admission-module work must reuse them rather than crea
 ### Website CMS
 
 - `pages`
+- `page_sections`
 - `content_translations`
 - `notices`
 - `facilities`
@@ -412,26 +413,36 @@ When adding a module:
 Canonical state model:
 
 ```text
-draft
-  → submitted
-  → under_review
-  → correction_required
-      → submitted or under_review
-  → approved or selected
-  → fee_verified
-  → admitted
+draft → submitted/resubmitted → eligibility_check → under_review
+      → correction_required → resubmitted
+      → approved → selected → payment_pending → fee_verified → admitted
 
 Possible terminal/exception states: rejected, withdrawn
 ```
 
-Rules are enforced in `Admin\ApplicationController::status()`:
+`App\Services\ApplicationWorkflowService` is authoritative. The admin controller and every graphical or batch action must call it rather than updating application status directly:
 
 - only listed transitions are accepted;
-- correction and rejection require remarks;
-- every transition writes `application_status_history`;
-- every transition notifies the applicant;
-- admission creates `student_enrollments` if one does not already exist;
+- `status_version` provides optimistic-lock protection;
+- programme eligibility, assessed fees, seat allocation and enrolment prerequisites are checked at the stages where they apply;
+- targeted corrections remain in the guided record because they require section, field or document instructions;
+- selection remains in the guided record because it requires programme, category and quota context;
+- rejection and withdrawal require remarks;
+- every successful transition writes `application_status_history`, an audit event and an applicant notification;
+- admission confirms the allocation and creates `student_enrollments` if one does not already exist;
 - the existing user account remains active.
+
+### Staff application workflow
+
+`GET /admin/applications` defaults to a nine-column responsive pipeline: Intake, Review, Corrections, Approved, Selected, Payment, Fee verified, Admitted and Closed. The same filters and reviewer scope apply to the alternative paginated table and CSV export.
+
+- Cards show age, reviewer, first preference, document/payment readiness and a recommended next action.
+- Desktop drag-and-drop proposes only a transition listed for that record. Every card also has keyboard/touch-friendly action controls.
+- Drop and button actions submit the current `status_version`; the server re-checks the transition and all workflow invariants.
+- Batch assignment is limited to 100 validated IDs and an active staff reviewer.
+- Batch status processing executes records independently through `ApplicationWorkflowService`, reports changed and skipped totals, and never offers targeted correction or seat selection as a generic batch action.
+- Reviewer users continue to see only applications assigned to them. The bulk routes have their own `applications.assign` or `applications.decide` permission middleware.
+- `GET /admin/applications/{id}` provides the graphical lifecycle rail, readiness summary, sliding evidence panels and applicant-specific decision controls.
 
 The application controller supports:
 
@@ -485,14 +496,17 @@ English is the source/fallback. If a Bengali or Hindi field is empty, the Englis
 
 CMS-managed entities include:
 
-- core pages;
+- a page shell for every public content route, including home, programmes, admissions, contact, privacy and terms;
+- ordered `page_sections` with rich-text, image/text, feature-card, statistic, call-to-action and live-module layouts;
 - notices;
 - faculty;
 - facilities;
 - FAQs;
 - gallery items.
 
-Public routes also include programmes, admissions, contact and static privacy/terms content. Administration screens are primarily English in Release 1; do not claim full three-language translation of every staff screen.
+Each page section has independent draft/published state, stable anchor key, visual variant, ordering controls, optional CMS media, safe links and Bengali/Hindi translations with English fallback. Archiving preserves the section row and translations. A live-module section reads the existing programme, admission-cycle, notice, facility, faculty, gallery or FAQ tables rather than copying those records.
+
+Programmes and versioned admission cycles remain authoritative operational data. Their public records are composed into CMS-managed page shells but are not duplicated into a second content store. Administration and applicant workflow screens remain code-controlled and primarily English; do not claim full three-language translation of every operational screen.
 
 ## 16. Files, privacy and sensitive data
 
@@ -1020,16 +1034,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current Release 1 application baseline includes the responsive UI work in commit:
+The current validated Release 1 baseline, including the graphical admin application workflow, is:
 
 ```text
-0b0caf1 Improve Phase 1 responsive interface styling
+28f9090 Align batch smoke assertion with workflow fixture
 ```
 
-The authoritative CI run for that baseline passed PHP 8.1–8.3, Composer, MySQL schema/seeding and the complete HTTP/PDF smoke suite:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install tests on MySQL 8.0 and MariaDB 10.4, including the complete HTTP/PDF suite and graphical-workflow RBAC/batch coverage:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/36897665131
+https://github.com/senditdebasish-maker/a/actions/runs/37044001201
 ```
 
-Future developers should keep CI green and add Phase 2 acceptance coverage rather than weakening existing checks.
+Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.

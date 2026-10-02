@@ -27,6 +27,7 @@ if ($phase === 'seed') {
     $insert($pdo,'role_permissions',['role_id'=>$role,'permission_id'=>$permission]);
     $staff=$insert($pdo,'users',['first_name'=>'Legacy','last_name'=>'Officer','email'=>'legacy-officer@example.test','mobile'=>null,'password_hash'=>password_hash('Legacy#Password1',PASSWORD_DEFAULT),'status'=>'active','preferred_locale'=>'en','avatar_path'=>null,'email_verified_at'=>$now,'email_verification_token'=>null,'email_verification_expires_at'=>null,'last_login_at'=>null,'last_login_ip'=>null,'password_changed_at'=>$now,'created_at'=>$now,'updated_at'=>$now,'deleted_at'=>null]);
     $user=$insert($pdo,'users',['first_name'=>'Legacy','last_name'=>'Applicant','email'=>'legacy-applicant@example.test','mobile'=>'9000000000','password_hash'=>password_hash('Legacy#Password1',PASSWORD_DEFAULT),'status'=>'active','preferred_locale'=>'en','avatar_path'=>null,'email_verified_at'=>$now,'email_verification_token'=>null,'email_verification_expires_at'=>null,'last_login_at'=>null,'last_login_ip'=>null,'password_changed_at'=>$now,'created_at'=>$now,'updated_at'=>$now,'deleted_at'=>null]);
+    $insert($pdo,'pages',['title'=>'Legacy About Title','slug'=>'about','eyebrow'=>'Legacy eyebrow','excerpt'=>'Legacy excerpt that must remain unchanged.','body'=>'Legacy body that must be preserved in the additive builder migration.','template'=>'standard','hero_image'=>null,'meta_title'=>'Legacy meta title','meta_description'=>'Legacy meta description','status'=>'published','published_at'=>$now,'created_by'=>$staff,'updated_by'=>$staff,'created_at'=>$now,'updated_at'=>$now]);
     $session=$insert($pdo,'academic_sessions',['name'=>'2026-27','starts_on'=>'2026-08-01','ends_on'=>'2027-07-31','status'=>'active','created_at'=>$now,'updated_at'=>$now]);
     $program=$insert($pdo,'programs',['department_id'=>null,'name'=>'Bachelor of Pharmacy','code'=>'BPH','slug'=>'bph','award_type'=>'Degree','duration_years'=>4,'total_semesters'=>8,'summary'=>null,'description'=>null,'eligibility_summary'=>null,'career_summary'=>null,'image_path'=>null,'status'=>'active','sort_order'=>1,'created_at'=>$now,'updated_at'=>$now]);
     $cycle=$insert($pdo,'admission_cycles',['academic_session_id'=>$session,'name'=>'Legacy Open Cycle','code'=>'LEGACY-26','starts_at'=>'2026-01-01 00:00:00','ends_at'=>'2026-12-31 23:59:59','correction_deadline'=>null,'status'=>'open','instructions'=>'Legacy instructions','declaration_text'=>'Legacy declaration','application_number_prefix'=>'NCP-26','created_at'=>$now,'updated_at'=>$now]);
@@ -46,7 +47,7 @@ if ($phase === 'seed') {
 
 $assert = static function (bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); };
 $tableCount=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'")->fetchColumn();
-$assert($tableCount===64,"Expected 64 tables after upgrade, got {$tableCount}");
+$assert($tableCount===65,"Expected 65 tables after upgrade, got {$tableCount}");
 $cycle=$pdo->query("SELECT status, slug, configuration_version FROM admission_cycles WHERE code='LEGACY-26'")->fetch();
 $assert($cycle['status']==='published' && $cycle['slug']==='legacy-26' && (int)$cycle['configuration_version']===1,'Legacy cycle was not normalized/versioned.');
 $app=$pdo->query("SELECT id,configuration_version_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
@@ -60,6 +61,13 @@ $mail=$pdo->query("SELECT body_html, body_checksum_sha256, sensitive_redacted FR
 $assert($mail['body_html']===null && strlen((string)$mail['body_checksum_sha256'])===64 && (int)$mail['sensitive_redacted']===1,'Sensitive historical mail was not redacted.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_document_versions')->fetchColumn()===1,'Document revision was not backfilled.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM admission_fee_rules')->fetchColumn()===2,'Fee rules were not backfilled.');
-$ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='003_submission_snapshot_revisions'")->fetchColumn();
-$assert(is_string($ledger)&&strlen($ledger)===64,'Migration checksum was not recorded.');
-echo "Existing-install admission migration verified.\n";
+$ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='004_cms_page_builder'")->fetchColumn();
+$assert(is_string($ledger)&&strlen($ledger)===64,'CMS builder migration checksum was not recorded.');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM pages WHERE slug IN ('home','about','programs','admissions','facilities','faculty','notices','gallery','faq','contact','privacy','terms')")->fetchColumn()===12,'Public CMS page shells were not backfilled.');
+$legacyPage=$pdo->query("SELECT id,title,body FROM pages WHERE slug='about'")->fetch();
+$assert(($legacyPage['title']??'')==='Legacy About Title'&&($legacyPage['body']??'')==='Legacy body that must be preserved in the additive builder migration.','Existing CMS page content changed during migration.');
+$preservedBody=$pdo->query('SELECT body FROM page_sections WHERE page_id='.(int)$legacyPage['id']." AND section_key='overview'")->fetchColumn();
+$assert($preservedBody===$legacyPage['body'],'Existing CMS page body was not preserved as a builder section.');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='page_sections'")->fetchColumn()===1,'Page section builder table is missing.');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM page_sections ps JOIN pages p ON p.id=ps.page_id WHERE p.slug='home' AND ps.status='published'")->fetchColumn()>=6,'Editable starter home composition was not backfilled.');
+echo "Existing-install admission and CMS migration verified.\n";

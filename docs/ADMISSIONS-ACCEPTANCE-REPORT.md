@@ -50,7 +50,7 @@ Cycle state and application state are separate. Public availability is calculate
 
 ## 3. Schema
 
-A clean installation contains **64 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions.
+A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder without changing admission records.
 
 Core admission additions are:
 
@@ -176,7 +176,7 @@ GitHub Actions runs:
 1. Composer strict validation.
 2. Dependency installation.
 3. PHP syntax lint on PHP 8.1, 8.2 and 8.3.
-4. Clean MySQL schema import (64 tables).
+4. Clean MySQL/MariaDB schema import (65 tables).
 5. Production Seeder integrity checks.
 6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002 and 003.
 7. Admission lifecycle, targeted correction, eligibility and immutable snapshot revision workflow checks.
@@ -213,6 +213,7 @@ MySQL DDL auto-commits. The preferred rollback is a forward fix while retaining 
 
 - `database/migrations/002_admission_management.rollback.md`
 - `database/migrations/003_submission_snapshot_revisions.rollback.md`
+- `database/migrations/004_cms_page_builder.rollback.md`
 
 Do not drop admission tables or delete application/snapshot records in production. If an upgrade fails, keep maintenance mode active, capture the error and schema state, restore only from the verified backup when a forward fix is not viable, and reconcile uploaded private files created after that backup.
 
