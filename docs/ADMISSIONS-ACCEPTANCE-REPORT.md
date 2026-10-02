@@ -2,7 +2,7 @@
 
 **Institution:** Netaji College of Pharmacy  
 **Release branch:** `arena/01a0f38a-a`  
-**Release date:** 1 October 2026  
+**Release date:** 2 October 2026
 **Architecture:** custom PHP 8.1+ / MySQL 8 / Apache (XAMPP compatible); no Node.js runtime
 
 ## 1. Delivery status
@@ -98,7 +98,9 @@ Existing tables receive additive nullable/defaulted columns and indexes only. Th
 - `GET|POST /admin/admissions/{id}`
 - `GET /admin/admissions/{id}/preview`
 - `POST /admin/admissions/{id}/{publish|close|archive|duplicate}`
-- programme assignment, seat, eligibility, fee, form-section, form-field and document-requirement routes beneath `/admin/admissions/{id}`
+- programme assignment plus programme-default update/removal routes beneath `/admin/admissions/{id}`
+- seat-capacity/matrix, eligibility, fee, form-section, form-field and document-requirement create/update routes
+- guarded POST removal routes for unused draft seat rows, eligibility rules, fee rules, empty sections, unanswered fields and unused document requirements
 
 ### Review/reporting
 
@@ -129,7 +131,9 @@ The super-admin receives the full permission set. Admission officers manage oper
 
 ## 6. Functional behavior
 
-- Draft cycles can be created and configured from one workspace.
+- Draft cycles can be created and configured from one anchored, responsive workspace organized into overview, cycle settings, programmes, form builder, documents and versions.
+- Existing programme defaults, capacity/category seats, eligibility and fee rules, form sections/fields/options/conditional JSON, and document requirements are editable rather than add-only.
+- Draft-only removal actions enforce ownership and usage guards so applicant-linked configuration is preserved; fields can be set inactive when deletion is not safe.
 - Readiness blocks publication until dates, programme, seats, eligibility, fees, required fields, documents, instructions and declaration are valid.
 - Publication captures a SHA-256 configuration version and freezes application-level editing.
 - Close/archive are explicit lifecycle transitions; date-derived `scheduled`, `live`, `closing_soon` and `closed` states are server-calculated.
@@ -177,7 +181,8 @@ GitHub Actions runs:
 6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002 and 003.
 7. Admission lifecycle, targeted correction, eligibility and immutable snapshot revision workflow checks.
 8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes.
-9. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+9. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
+10. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers and the institution's exact reservation/eligibility policy.
 
@@ -215,7 +220,7 @@ Do not drop admission tables or delete application/snapshot records in productio
 
 - Payment processing remains the repository's existing manual proof-and-verification architecture; no external gateway was invented.
 - Programme catalogue records referenced by published cycles are intentionally not destructively edited or deleted in this workspace. Create a new programme record or duplicate a cycle when historical meaning would change.
-- Seat matrix rows with active allocations cannot be reduced below filled count. Destructive row deletion/rebalancing is intentionally absent.
+- Seat matrix capacity cannot be reduced below filled seats. Only empty draft rows can be deleted; rows with allocations are intentionally retained.
 - Automated tests use MySQL and HTTP/PDF smoke checks. Pixel-level cross-browser screenshots were not available in the sandbox and must be completed during deployment acceptance.
 - Live SMTP, DNS, storage permissions, cron/backup scheduling and the institution's production database were not available for certification.
 - Institution-specific statutory approval, affiliation, reservation, refund and Aadhaar/legal-basis content must be approved by authorized institutional/legal owners before launch.

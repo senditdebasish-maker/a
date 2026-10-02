@@ -49,8 +49,11 @@ $tableCount=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHE
 $assert($tableCount===64,"Expected 64 tables after upgrade, got {$tableCount}");
 $cycle=$pdo->query("SELECT status, slug, configuration_version FROM admission_cycles WHERE code='LEGACY-26'")->fetch();
 $assert($cycle['status']==='published' && $cycle['slug']==='legacy-26' && (int)$cycle['configuration_version']===1,'Legacy cycle was not normalized/versioned.');
-$app=$pdo->query("SELECT configuration_version_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
-$assert((int)$app['configuration_version_id']>0,'Legacy application configuration version missing.');
+$app=$pdo->query("SELECT id,configuration_version_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
+$assert($app&&(int)$app['configuration_version_id']>0,'Legacy application configuration version missing.');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM applications')->fetchColumn()===1,'Legacy application record count changed during migration.');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM application_preferences WHERE application_id='.(int)$app['id'])->fetchColumn()===1,'Legacy programme preference was not preserved.');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM application_documents WHERE application_id='.(int)$app['id'])->fetchColumn()===1,'Legacy document record was not preserved.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_submission_snapshots')->fetchColumn()===1,'Legacy submission snapshot missing.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_submission_snapshot_revisions')->fetchColumn()===1,'Legacy immutable snapshot revision missing.');
 $mail=$pdo->query("SELECT body_html, body_checksum_sha256, sensitive_redacted FROM mail_logs WHERE template_key='password_reset'")->fetch();

@@ -26,12 +26,23 @@ jobs:
       - run: composer install --no-interaction --no-progress --prefer-dist
       - name: Lint PHP files
         run: find app config database public resources routes scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Audit CSS assets and layout references
+        run: php scripts/ci-css-audit.php
 
   database-smoke:
+    name: database-smoke (${{ matrix.database.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database:
+          - name: MySQL 8.0
+            image: mysql:8.0
+          - name: MariaDB 10.4
+            image: mariadb:10.4
     services:
       mysql:
-        image: mysql:8.0
+        image: ${{ matrix.database.image }}
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: ncp_test
@@ -94,16 +105,22 @@ jobs:
           BACKUP_RETENTION_DAYS=30
           REQUIRE_STAFF_MFA=false
           ENV
+      - name: Audit admin routes and permissions
+        run: php scripts/ci-route-audit.php
+      - name: Preflight clean seeded database
+        run: php scripts/admissions-preflight.php
       - name: Exercise existing-install admission migration
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e 'CREATE DATABASE ncp_upgrade CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
           mysql -h 127.0.0.1 -uroot -proot ncp_upgrade < database/baselines/001_initial_schema.mysql.sql
           DB_DATABASE=ncp_upgrade php scripts/ci-migration-smoke.php seed
           sed -i 's/DB_DATABASE=ncp_test/DB_DATABASE=ncp_upgrade/' .env
+          php scripts/admissions-preflight.php
           php scripts/migrate.php --dry-run
           php scripts/migrate.php --confirm=APPLY --backup-confirmed
           php scripts/migrate.php --confirm=APPLY --backup-confirmed | grep 'up to date'
           DB_DATABASE=ncp_upgrade php scripts/ci-migration-smoke.php verify
+          php scripts/admissions-preflight.php
           sed -i 's/DB_DATABASE=ncp_upgrade/DB_DATABASE=ncp_test/' .env
       - name: Exercise admission workflow invariants
         run: php scripts/ci-admission-workflow.php
@@ -112,7 +129,7 @@ jobs:
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private
-          php -S 127.0.0.1:8088 -t public public/index.php > storage/logs/ci-http-server.log 2>&1 &
+          php -S 127.0.0.1:8088 -t public scripts/ci-server-router.php > storage/logs/ci-http-server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
