@@ -420,7 +420,3 @@ final class Seeder
         return (int) $statement->fetchColumn();
     }
 }
-ue]);
-        return (int) $statement->fetchColumn();
-    }
-}
