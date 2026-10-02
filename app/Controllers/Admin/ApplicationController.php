@@ -24,7 +24,7 @@ final class ApplicationController extends Controller
             'status'=>trim((string)($_GET['status']??'')),'q'=>trim((string)($_GET['q']??'')),
             'cycle'=>(int)($_GET['cycle']??0),'program'=>(int)($_GET['program']??0),
             'category'=>trim((string)($_GET['category']??'')),'eligibility'=>trim((string)($_GET['eligibility']??'')),
-            'payment'=>trim((string)($_GET['payment']??'')),'reviewer'=>(int)($_GET['reviewer']??0),
+            'payment'=>trim((string)($_GET['payment']??'')),'reviewer'=>trim((string)($_GET['reviewer']??'')),
         ];
         $where=['a.deleted_at IS NULL']; $params=[];
         if ($filters['status']!=='') { $where[]='a.status=:status'; $params['status']=$filters['status']; }
@@ -33,7 +33,8 @@ final class ApplicationController extends Controller
         if ($filters['category']!=='') { $where[]='ap.category=:category'; $params['category']=$filters['category']; }
         if ($filters['eligibility']!=='') { $where[]='a.eligibility_status=:eligibility'; $params['eligibility']=$filters['eligibility']; }
         if ($filters['payment']!=='') { $where[]='EXISTS (SELECT 1 FROM payments pay WHERE pay.application_id=a.id AND pay.status=:payment)'; $params['payment']=$filters['payment']; }
-        if ($filters['reviewer']>0) { $where[]='a.assigned_to=:assigned_reviewer'; $params['assigned_reviewer']=$filters['reviewer']; }
+        if ($filters['reviewer']==='unassigned') $where[]='a.assigned_to IS NULL';
+        elseif ((int)$filters['reviewer']>0) { $where[]='a.assigned_to=:assigned_reviewer'; $params['assigned_reviewer']=(int)$filters['reviewer']; }
         if ($filters['q']!=='') {
             $where[]='(a.application_number LIKE :search_number OR u.first_name LIKE :search_first OR u.last_name LIKE :search_last OR u.email LIKE :search_email OR u.mobile LIKE :search_mobile)';
             $term='%'.$filters['q'].'%'; $params+=['search_number'=>$term,'search_first'=>$term,'search_last'=>$term,'search_email'=>$term,'search_mobile'=>$term];
@@ -41,24 +42,50 @@ final class ApplicationController extends Controller
         if (Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])) { $where[]='a.assigned_to=:reviewer_scope'; $params['reviewer_scope']=Auth::id(); }
         $from=" FROM applications a JOIN users u ON u.id=a.user_id JOIN admission_cycles ac ON ac.id=a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id=a.user_id LEFT JOIN users reviewer ON reviewer.id=a.assigned_to LEFT JOIN cycle_programs selected_cp ON selected_cp.id=a.selected_cycle_program_id LEFT JOIN programs selected_program ON selected_program.id=selected_cp.program_id WHERE ".implode(' AND ',$where);
         $total=(int)$db->scalar('SELECT COUNT(DISTINCT a.id)'.$from,$params);
-        $perPage=25; $pages=max(1,(int)ceil($total/$perPage)); $page=max(1,min($pages,(int)($_GET['page']??1))); $offset=($page-1)*$perPage;
-        $applications=$db->all("SELECT a.*,CONCAT(u.first_name,' ',u.last_name) AS applicant_name,u.email,u.mobile,ap.category,ac.name AS cycle_name,selected_program.name AS selected_program_name,CONCAT(reviewer.first_name,' ',reviewer.last_name) AS reviewer_name,(SELECT pay.status FROM payments pay WHERE pay.application_id=a.id ORDER BY pay.id DESC LIMIT 1) AS payment_status".$from." ORDER BY COALESCE(a.submitted_at,a.created_at) DESC,a.id DESC LIMIT {$perPage} OFFSET {$offset}",$params);
+        $viewMode=in_array($_GET['view']??'', ['board','table'], true)?(string)$_GET['view']:'board';
+        $perPage=$viewMode==='board'?300:25; $pages=max(1,(int)ceil($total/$perPage)); $page=max(1,min($pages,(int)($_GET['page']??1))); $offset=($page-1)*$perPage;
+        $applications=$db->all("SELECT a.*,CONCAT(u.first_name,' ',u.last_name) AS applicant_name,u.email,u.mobile,ap.category,ac.name AS cycle_name,selected_program.name AS selected_program_name,CONCAT(reviewer.first_name,' ',reviewer.last_name) AS reviewer_name,
+            (SELECT pay.status FROM payments pay WHERE pay.application_id=a.id ORDER BY pay.id DESC LIMIT 1) AS payment_status,
+            (SELECT COUNT(*) FROM application_documents ad WHERE ad.application_id=a.id) AS document_total,
+            (SELECT COUNT(*) FROM application_documents ad WHERE ad.application_id=a.id AND ad.status='verified') AS document_verified,
+            (SELECT cp.id FROM application_preferences pref JOIN cycle_programs cp ON cp.id=pref.cycle_program_id WHERE pref.application_id=a.id ORDER BY pref.preference_order LIMIT 1) AS first_preference_id,
+            (SELECT p.name FROM application_preferences pref JOIN cycle_programs cp ON cp.id=pref.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE pref.application_id=a.id ORDER BY pref.preference_order LIMIT 1) AS first_preference_name,
+            (SELECT COUNT(*) FROM application_corrections correction WHERE correction.application_id=a.id AND correction.status='open') AS open_corrections,
+            TIMESTAMPDIFF(HOUR,COALESCE(a.submitted_at,a.created_at),NOW()) AS age_hours".$from." ORDER BY COALESCE(a.submitted_at,a.created_at) DESC,a.id DESC LIMIT {$perPage} OFFSET {$offset}",$params);
+        $workflow=new ApplicationWorkflowService();
+        foreach($applications as &$application)$application['allowed_transitions']=$workflow->allowedTransitions((string)$application['status']);unset($application);
         $countParams=[];$countWhere='deleted_at IS NULL';if(Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])){$countWhere.=' AND assigned_to=:reviewer';$countParams['reviewer']=Auth::id();}
-        $counts=$db->all('SELECT status,COUNT(*) AS total FROM applications WHERE '.$countWhere.' GROUP BY status',$countParams);
+        $summary=$db->fetch("SELECT COUNT(*) AS total,
+            SUM(CASE WHEN status IN ('submitted','resubmitted','eligibility_check','under_review','correction_required','approved','selected','payment_pending','fee_verified') THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN assigned_to IS NULL AND status NOT IN ('draft','admitted','rejected','withdrawn') THEN 1 ELSE 0 END) AS unassigned,
+            SUM(CASE WHEN status IN ('submitted','resubmitted','eligibility_check','under_review') AND TIMESTAMPDIFF(DAY,COALESCE(submitted_at,created_at),NOW())>=3 THEN 1 ELSE 0 END) AS ageing,
+            SUM(CASE WHEN status='correction_required' THEN 1 ELSE 0 END) AS corrections,
+            SUM(CASE WHEN status='admitted' THEN 1 ELSE 0 END) AS admitted FROM applications WHERE {$countWhere}",$countParams)??[];
         $cycles=$db->all('SELECT id,name FROM admission_cycles ORDER BY starts_at DESC');
         $programs=$db->all('SELECT cp.id,cp.admission_cycle_id,p.name,p.code FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id ORDER BY p.name');
         $categories=$db->all("SELECT code,name FROM admission_categories WHERE status='active' ORDER BY sort_order,name");
         $reviewers=$db->all("SELECT DISTINCT u.id,CONCAT(u.first_name,' ',u.last_name) AS name FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.status='active' AND r.slug IN ('reviewer','admission-officer','super-admin') ORDER BY name");
+        $boardColumns=[
+            ['key'=>'intake','label'=>'Intake','hint'=>'Submitted and resubmitted','statuses'=>['draft','submitted','resubmitted'],'target'=>'eligibility_check'],
+            ['key'=>'review','label'=>'Review','hint'=>'Checks and officer review','statuses'=>['eligibility_check','under_review'],'target'=>'under_review'],
+            ['key'=>'corrections','label'=>'Corrections','hint'=>'Waiting for applicant','statuses'=>['correction_required'],'target'=>'correction_required'],
+            ['key'=>'approved','label'=>'Approved','hint'=>'Ready for allocation','statuses'=>['approved'],'target'=>'approved'],
+            ['key'=>'selected','label'=>'Selected','hint'=>'Seat allocated','statuses'=>['selected'],'target'=>'selected'],
+            ['key'=>'payment','label'=>'Payment','hint'=>'Admission fee due','statuses'=>['payment_pending'],'target'=>'payment_pending'],
+            ['key'=>'verified','label'=>'Fee verified','hint'=>'Ready to admit','statuses'=>['fee_verified'],'target'=>'fee_verified'],
+            ['key'=>'admitted','label'=>'Admitted','hint'=>'Enrolment created','statuses'=>['admitted'],'target'=>'admitted'],
+            ['key'=>'closed','label'=>'Closed','hint'=>'Rejected or withdrawn','statuses'=>['rejected','withdrawn'],'target'=>null],
+        ];
         $status=$filters['status']; $search=$filters['q'];
-        $this->view('admin/applications/index',compact('applications','counts','status','search','filters','cycles','programs','categories','reviewers','total','page','pages')+['title'=>'Applications'],'admin');
+        $this->view('admin/applications/index',compact('applications','summary','boardColumns','viewMode','status','search','filters','cycles','programs','categories','reviewers','total','page','pages')+['title'=>'Applications'],'admin');
     }
 
     public function show(string $id): void
     {
         $db = Database::get();
         $application = $db->fetch("SELECT a.*, CONCAT(u.first_name, ' ', u.last_name) AS applicant_name, u.email, u.mobile,
-            ac.name AS cycle_name, ap.*, a.id AS id, a.status AS status FROM applications a JOIN users u ON u.id = a.user_id
-            JOIN admission_cycles ac ON ac.id = a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id = a.user_id WHERE a.id = :id", ['id' => (int) $id]);
+            ac.name AS cycle_name, ap.*, a.id AS id, a.status AS status,CONCAT(reviewer.first_name,' ',reviewer.last_name) AS assigned_reviewer_name FROM applications a JOIN users u ON u.id = a.user_id
+            JOIN admission_cycles ac ON ac.id = a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id = a.user_id LEFT JOIN users reviewer ON reviewer.id=a.assigned_to WHERE a.id = :id", ['id' => (int) $id]);
         if (!$application) { http_response_code(404); $this->view('errors/404', ['title' => 'Application not found'], 'admin'); return; }
         if (Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])&&(int)$application['assigned_to']!==Auth::id()) { http_response_code(403); $this->view('errors/403',['title'=>'Access denied'],'admin'); return; }
         $decodedEligibility = json_decode((string) ($application['eligibility_flags'] ?? ''), true) ?: [];
@@ -104,8 +131,8 @@ final class ApplicationController extends Controller
     {
         $status=trim((string)($_POST['status']??''));
         $remarks=trim((string)($_POST['remarks']??''));
-        if ($status==='correction_required') { Flash::set('warning','Use the targeted correction request form.'); $this->redirect('admin/applications/'.$id); }
-        if (in_array($status,['rejected','withdrawn'],true)&&$remarks==='') { Flash::set('warning','Remarks are required for this decision.'); $this->redirect('admin/applications/'.$id); }
+        if ($status==='correction_required') { Flash::set('warning','Use the targeted correction request form.'); if(($_POST['return_to']??'')==='board')$this->redirect($this->applicationIndexTarget('board',(string)($_POST['return_query']??''))); $this->redirect('admin/applications/'.$id); }
+        if (in_array($status,['rejected','withdrawn'],true)&&$remarks==='') { Flash::set('warning','Remarks are required for this decision.'); if(($_POST['return_to']??'')==='board')$this->redirect($this->applicationIndexTarget('board',(string)($_POST['return_query']??''))); $this->redirect('admin/applications/'.$id); }
         try {
             (new ApplicationWorkflowService())->transition((int)$id,$status,$remarks,(int)Auth::id(),[
                 'cycle_program_id'=>(int)($_POST['cycle_program_id']??0),
@@ -115,6 +142,7 @@ final class ApplicationController extends Controller
             ]);
             Flash::set('success','Application status updated with state and seat checks.');
         } catch (RuntimeException $exception) { Flash::set('warning',$exception->getMessage()); }
+        if (($_POST['return_to']??'')==='board') $this->redirect($this->applicationIndexTarget('board', (string)($_POST['return_query']??'')));
         $this->redirect('admin/applications/'.$id);
     }
 
@@ -144,6 +172,53 @@ final class ApplicationController extends Controller
         AuditService::log('application_assigned', 'application', $id, [], ['assigned_to' => $reviewerId]);
         Flash::set('success', 'Application assigned to reviewer.');
         $this->redirect('admin/applications/' . $id);
+    }
+
+    public function bulkAssign(): never
+    {
+        $ids=$this->bulkApplicationIds();
+        $reviewerId=(int)($_POST['assigned_to']??0);
+        $db=Database::get();
+        $reviewer=$db->fetch("SELECT DISTINCT u.id FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=:id AND u.status='active' AND r.slug IN ('super-admin','admission-officer','reviewer')",['id'=>$reviewerId]);
+        if(!$ids||!$reviewer){Flash::set('warning',$ids?'Choose a valid active reviewer.':'Select at least one application.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
+        [$where,$params]=$this->bulkPlaceholders($ids);
+        $records=$db->all("SELECT id FROM applications WHERE deleted_at IS NULL AND id IN ({$where})",$params);
+        $validIds=array_map('intval',array_column($records,'id'));
+        if(!$validIds){Flash::set('warning','No accessible application was selected.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
+        $now=date('Y-m-d H:i:s');
+        $db->transaction(function(Database $db)use($validIds,$reviewerId,$now):void{foreach($validIds as $applicationId)$db->update('applications',['assigned_to'=>$reviewerId,'assigned_at'=>$now,'updated_at'=>$now],'id=:id',['id'=>$applicationId]);});
+        $skipped=count($ids)-count($validIds);
+        AuditService::log('applications_bulk_assigned','application',null,[],['application_ids'=>$validIds,'assigned_to'=>$reviewerId,'requested_count'=>count($ids),'assigned_count'=>count($validIds),'skipped_count'=>$skipped]);
+        $assignmentMessage=count($validIds).' application'.(count($validIds)===1?'':'s').' assigned.';
+        if($skipped>0)Flash::set('warning',$assignmentMessage." {$skipped} skipped because the record no longer exists.");
+        else Flash::set('success',$assignmentMessage.' Decisions remain individual unless a separate batch transition is explicitly submitted.');
+        $this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));
+    }
+
+    public function bulkStatus(): never
+    {
+        $ids=$this->bulkApplicationIds();
+        $target=trim((string)($_POST['bulk_status']??''));
+        $remarks=trim((string)($_POST['bulk_remarks']??''));
+        $allowedTargets=['eligibility_check','under_review','approved','payment_pending','fee_verified','admitted','rejected','withdrawn'];
+        if(!$ids||!in_array($target,$allowedTargets,true)){Flash::set('warning',$ids?'Choose a supported batch transition.':'Select at least one application.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
+        if(in_array($target,['rejected','withdrawn'],true)&&$remarks===''){Flash::set('warning','Batch rejection or withdrawal requires an auditable reason.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
+        $workflow=new ApplicationWorkflowService();$updated=0;$failures=[];
+        foreach($ids as $applicationId){
+            try{
+                $current=Database::get()->fetch('SELECT status,status_version,assigned_to FROM applications WHERE id=:id AND deleted_at IS NULL',['id'=>$applicationId]);
+                if(!$current)throw new RuntimeException('application not found');
+                if(Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])&&(int)$current['assigned_to']!==Auth::id())throw new RuntimeException('application is outside your assignment scope');
+                if(!in_array($target,$workflow->allowedTransitions((string)$current['status']),true))throw new RuntimeException('transition not available from '.str_replace('_',' ',(string)$current['status']));
+                $workflow->transition($applicationId,$target,$remarks,(int)Auth::id(),['status_version'=>(int)$current['status_version']]);
+                $updated++;
+            }catch(RuntimeException $exception){$failures[]='#'.$applicationId.' '.$exception->getMessage();}
+        }
+        AuditService::log('applications_bulk_transitioned','application',null,[],['target_status'=>$target,'requested_count'=>count($ids),'updated_count'=>$updated,'failure_count'=>count($failures)]);
+        if($failures)Flash::set('warning',"{$updated} application".($updated===1?'':'s')." changed; ".count($failures).' skipped after server validation: '.implode(' · ',array_slice($failures,0,3)).(count($failures)>3?' · Additional failures omitted from this notice.':''));
+        elseif($updated>0)Flash::set('success',"{$updated} application".($updated===1?'':'s')." moved to ".str_replace('_',' ',$target).'.');
+        else Flash::set('warning','No application changed.');
+        $this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));
     }
 
     public function note(string $id): never
@@ -220,7 +295,7 @@ final class ApplicationController extends Controller
         if((int)($_GET['cycle']??0)>0){$where[]='a.admission_cycle_id=:cycle';$params['cycle']=(int)$_GET['cycle'];}
         if((int)($_GET['program']??0)>0){$where[]='EXISTS (SELECT 1 FROM application_preferences fp WHERE fp.application_id=a.id AND fp.cycle_program_id=:program)';$params['program']=(int)$_GET['program'];}
         if(trim((string)($_GET['payment']??''))!==''){$where[]='EXISTS (SELECT 1 FROM payments py WHERE py.application_id=a.id AND py.status=:payment)';$params['payment']=trim((string)$_GET['payment']);}
-        if((int)($_GET['reviewer']??0)>0){$where[]='a.assigned_to=:assigned_reviewer';$params['assigned_reviewer']=(int)$_GET['reviewer'];}
+        $reviewerFilter=trim((string)($_GET['reviewer']??''));if($reviewerFilter==='unassigned')$where[]='a.assigned_to IS NULL';elseif((int)$reviewerFilter>0){$where[]='a.assigned_to=:assigned_reviewer';$params['assigned_reviewer']=(int)$reviewerFilter;}
         $search=trim((string)($_GET['q']??'')); if($search!==''){ $where[]="(a.application_number LIKE :q1 OR CONCAT(u.first_name,' ',u.last_name) LIKE :q2 OR u.email LIKE :q3 OR u.mobile LIKE :q4)"; $term='%'.$search.'%';$params+=['q1'=>$term,'q2'=>$term,'q3'=>$term,'q4'=>$term]; }
         if(Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])){$where[]='a.assigned_to=:reviewer';$params['reviewer']=Auth::id();}
         $rows=$db->all("SELECT a.application_number,CONCAT(u.first_name,' ',u.last_name) AS applicant,u.email,u.mobile,ac.name AS cycle,ap.category,a.eligibility_status,a.status,p.name AS selected_program,(SELECT py.status FROM payments py WHERE py.application_id=a.id ORDER BY py.id DESC LIMIT 1) AS payment_status,a.submitted_at FROM applications a JOIN users u ON u.id=a.user_id JOIN admission_cycles ac ON ac.id=a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id=a.user_id LEFT JOIN cycle_programs cp ON cp.id=a.selected_cycle_program_id LEFT JOIN programs p ON p.id=cp.program_id WHERE ".implode(' AND ',$where).' ORDER BY COALESCE(a.submitted_at,a.created_at) DESC',$params);
@@ -228,6 +303,33 @@ final class ApplicationController extends Controller
         $out=fopen('php://output','wb'); fwrite($out,"\xEF\xBB\xBF"); fputcsv($out,['Application No.','Applicant','Email','Mobile','Cycle','Category','Eligibility','Status','Selected programme','Payment','Submitted']);
         $safe=static function(mixed $value): string { $value=(string)$value; return preg_match('/^[=+\-@\t\r]/',$value)?"'".$value:$value; };
         foreach($rows as $row) fputcsv($out,array_map($safe,array_values($row))); fclose($out); exit;
+    }
+
+    /** @return array<int,int> */
+    private function bulkApplicationIds(): array
+    {
+        $submitted=$_POST['application_ids']??[];
+        if(!is_array($submitted))$submitted=[$submitted];
+        $ids=[];
+        foreach($submitted as $id){$id=filter_var($id,FILTER_VALIDATE_INT);if($id!==false&&(int)$id>0)$ids[(int)$id]=(int)$id;}
+        return array_slice(array_values($ids),0,100);
+    }
+
+    /** @param array<int,int> $ids @return array{0:string,1:array<string,int>} */
+    private function bulkPlaceholders(array $ids): array
+    {
+        $params=[];$placeholders=[];
+        foreach($ids as $index=>$id){$key='application_'.$index;$placeholders[]=':'.$key;$params[$key]=$id;}
+        return [implode(',',$placeholders),$params];
+    }
+
+    private function applicationIndexTarget(string $view, string $query): string
+    {
+        parse_str(ltrim($query,'?'),$submitted);
+        $allowed=[];
+        foreach(['status','q','cycle','program','category','eligibility','payment','reviewer'] as $key)if(isset($submitted[$key])&&is_scalar($submitted[$key])&&(string)$submitted[$key]!=='')$allowed[$key]=(string)$submitted[$key];
+        $allowed['view']=$view==='board'?'board':'table';
+        return 'admin/applications?'.http_build_query($allowed);
     }
 
     private function assertApplicationAccess(int $applicationId): array

@@ -107,6 +107,8 @@ $router->post('/admin/admissions/{id}/documents', [AdmissionController::class, '
 $router->post('/admin/admissions/{id}/documents/{requirementId}/delete', [AdmissionController::class, 'deleteDocument'], ['auth', 'permission:admission_documents.manage']);
 $router->get('/admin/applications', [AdminApplicationController::class, 'index'], ['auth', 'permission:applications.view']);
 $router->get('/admin/applications/export', [AdminApplicationController::class, 'export'], ['auth', 'permission:reports.export']);
+$router->post('/admin/applications/bulk/assign', [AdminApplicationController::class, 'bulkAssign'], ['auth', 'permission:applications.assign']);
+$router->post('/admin/applications/bulk/status', [AdminApplicationController::class, 'bulkStatus'], ['auth', 'permission:applications.decide']);
 $router->get('/admin/applications/{id}', [AdminApplicationController::class, 'show'], ['auth', 'permission:applications.view']);
 $router->get('/admin/applications/{id}/generated/{kind}', [GeneratedDocumentController::class, 'admin'], ['auth', 'permission:applications.view']);
 $router->get('/admin/payments/{id}/receipt', [GeneratedDocumentController::class, 'receipt'], ['auth', 'permission:payments.view']);
