@@ -96,6 +96,10 @@ storage/                  Private uploads, logs, sessions and encrypted backups
 docs/                     Architecture, XAMPP, privacy and launch guidance
 ```
 
+## System completion baseline
+
+The current branch includes the Release 1 college website and database-driven admissions system, plus an explicit CI system-integrity check covering critical routes, workflow guards, lifecycle services and schema surfaces. The authoritative source remains the working PHP application under `public/index.php`; `public/preview.html`, `public/student-preview.html` and `public/admin-preview.html` are mock visual previews only.
+
 ## Production status
 
 This repository is a substantial Release 1 implementation, but **no generic software can be declared production-ready without environment, institution and workflow acceptance**. Before real use:
