@@ -127,7 +127,7 @@ jobs:
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private
-          php -S 127.0.0.1:8088 -t public public/index.php > storage/logs/ci-http-server.log 2>&1 &
+          php -S 127.0.0.1:8088 -t public scripts/ci-server-router.php > storage/logs/ci-http-server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
