@@ -222,7 +222,7 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, and `database/migrations/004_cms_page_builder.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, `database/migrations/004_cms_page_builder.rollback.md`, and `database/migrations/005_application_reapply_attempts.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
 ## 8. Current database map (65 tables)
 
@@ -443,6 +443,12 @@ Possible terminal/exception states: rejected, withdrawn
 - Batch status processing executes records independently through `ApplicationWorkflowService`, reports changed and skipped totals, and never offers targeted correction or seat selection as a generic batch action.
 - Reviewer users continue to see only applications assigned to them. The bulk routes have their own `applications.assign` or `applications.decide` permission middleware.
 - `GET /admin/applications/{id}` provides the graphical lifecycle rail, readiness summary, sliding evidence panels and applicant-specific decision controls.
+
+### Reapplication and applicant form progression
+
+A rejected latest attempt may be reapplied only while its admission cycle still accepts applications. `ReapplicationService` creates a separate linked draft with the next `(user, cycle, attempt_no)` value; it never reopens or rewrites the rejected source. Profile-backed and application-specific form data, active preferences, active custom responses and current document files are copied. Copied documents return to `pending` review, while payments, fee assessments, declarations, decisions, allocations, corrections and snapshots are not copied. The new submission receives a new application number and immutable snapshot.
+
+Applicant forms remain one-panel-at-a-time workspaces. Every editable data panel has server-backed **Save for later** and **Save & next** actions; a failed save stays on the current panel. Document inputs upload immediately after selection through the existing CSRF-protected upload route, retain the ordinary submit fallback without JavaScript, and preserve immutable replacement revisions.
 
 The application controller supports:
 

@@ -298,6 +298,8 @@ CREATE TABLE applications (
     application_number VARCHAR(60) NULL UNIQUE,
     user_id BIGINT UNSIGNED NOT NULL,
     admission_cycle_id BIGINT UNSIGNED NOT NULL,
+    attempt_no SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    reapplied_from_application_id BIGINT UNSIGNED NULL,
     status VARCHAR(40) NOT NULL DEFAULT 'draft',
     current_step SMALLINT UNSIGNED NOT NULL DEFAULT 1,
     completion_percentage SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -321,7 +323,10 @@ CREATE TABLE applications (
     CONSTRAINT fk_applications_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_applications_cycle FOREIGN KEY (admission_cycle_id) REFERENCES admission_cycles(id),
     CONSTRAINT fk_applications_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
-    UNIQUE KEY uq_user_cycle (user_id, admission_cycle_id),
+    CONSTRAINT fk_applications_reapplied_from FOREIGN KEY (reapplied_from_application_id) REFERENCES applications(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_user_cycle_attempt (user_id, admission_cycle_id, attempt_no),
+    INDEX idx_applications_user_cycle (user_id, admission_cycle_id, created_at),
+    INDEX idx_applications_reapplied_from (reapplied_from_application_id),
     INDEX idx_applications_status (status),
     INDEX idx_applications_submitted (submitted_at),
     INDEX idx_applications_assignee (assigned_to, status),
@@ -1093,4 +1098,5 @@ INSERT INTO schema_migrations (version, description, checksum_sha256, batch, exe
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('002_admission_management', 'Admission management schema included by clean installer', NULL, 1, NULL, NOW());
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('003_submission_snapshot_revisions', 'Immutable submission revision schema included by clean installer', NULL, 1, NULL, NOW());
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('004_cms_page_builder', 'CMS page builder schema included by clean installer', NULL, 1, NULL, NOW());
+INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('005_application_reapply_attempts', 'Rejected-application reapply attempt lineage included by clean installer', NULL, 1, NULL, NOW());
 SET FOREIGN_KEY_CHECKS = 1;

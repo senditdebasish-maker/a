@@ -50,8 +50,9 @@ $tableCount=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHE
 $assert($tableCount===65,"Expected 65 tables after upgrade, got {$tableCount}");
 $cycle=$pdo->query("SELECT status, slug, configuration_version FROM admission_cycles WHERE code='LEGACY-26'")->fetch();
 $assert($cycle['status']==='published' && $cycle['slug']==='legacy-26' && (int)$cycle['configuration_version']===1,'Legacy cycle was not normalized/versioned.');
-$app=$pdo->query("SELECT id,configuration_version_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
+$app=$pdo->query("SELECT id,configuration_version_id,attempt_no,reapplied_from_application_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
 $assert($app&&(int)$app['configuration_version_id']>0,'Legacy application configuration version missing.');
+$assert((int)$app['attempt_no']===1&&$app['reapplied_from_application_id']===null,'Legacy application was not preserved as attempt 1.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM applications')->fetchColumn()===1,'Legacy application record count changed during migration.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_preferences WHERE application_id='.(int)$app['id'])->fetchColumn()===1,'Legacy programme preference was not preserved.');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM application_documents WHERE application_id='.(int)$app['id'])->fetchColumn()===1,'Legacy document record was not preserved.');
@@ -63,6 +64,10 @@ $assert((int)$pdo->query('SELECT COUNT(*) FROM application_document_versions')->
 $assert((int)$pdo->query('SELECT COUNT(*) FROM admission_fee_rules')->fetchColumn()===2,'Fee rules were not backfilled.');
 $ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='004_cms_page_builder'")->fetchColumn();
 $assert(is_string($ledger)&&strlen($ledger)===64,'CMS builder migration checksum was not recorded.');
+$reapplyLedger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='005_application_reapply_attempts'")->fetchColumn();
+$assert(is_string($reapplyLedger)&&strlen($reapplyLedger)===64,'Reapplication-attempt migration checksum was not recorded.');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='applications' AND index_name='uq_user_cycle'")->fetchColumn()===0,'Obsolete one-application-per-cycle index remains.');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='applications' AND index_name='uq_user_cycle_attempt'")->fetchColumn()===3,'Per-attempt uniqueness index is incomplete.');
 $assert((int)$pdo->query("SELECT COUNT(*) FROM pages WHERE slug IN ('home','about','programs','admissions','facilities','faculty','notices','gallery','faq','contact','privacy','terms')")->fetchColumn()===12,'Public CMS page shells were not backfilled.');
 $legacyPage=$pdo->query("SELECT id,title,body FROM pages WHERE slug='about'")->fetch();
 $assert(($legacyPage['title']??'')==='Legacy About Title'&&($legacyPage['body']??'')==='Legacy body that must be preserved in the additive builder migration.','Existing CMS page content changed during migration.');

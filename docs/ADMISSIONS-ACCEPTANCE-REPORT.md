@@ -2,7 +2,7 @@
 
 **Institution:** Netaji College of Pharmacy  
 **Release branch:** `arena/01a0f38a-a`  
-**Release date:** 2 October 2026
+**Release date:** 3 October 2026
 **Architecture:** custom PHP 8.1+ / MySQL 8 / Apache (XAMPP compatible); no Node.js runtime
 
 ## 1. Delivery status
@@ -37,6 +37,7 @@ Cycle state and application state are separate. Public availability is calculate
 - `AdmissionFeeService` — category/rule-based immutable assessments.
 - `ApplicationNumberService` — transactional per-cycle/programme numbering.
 - `ApplicationSnapshotService` — configuration-linked submission evidence and immutable revisions.
+- `ReapplicationService` — open-cycle, latest-rejected-attempt validation and transactional copying into a separately linked draft without mutating source evidence.
 - `UploadService` — private randomized storage, allowlisted MIME inspection, size checks, PDF/image validation and SHA-256 hashes.
 
 ### Views and assets
@@ -50,7 +51,7 @@ Cycle state and application state are separate. Public availability is calculate
 
 ## 3. Schema
 
-A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder without changing admission records.
+A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder; migration 005 replaces the one-row-per-user/cycle constraint with non-destructive numbered attempts and self-lineage. No migration deletes admission records.
 
 Core admission additions are:
 
@@ -82,8 +83,11 @@ Existing tables receive additive nullable/defaulted columns and indexes only. Th
 - `GET /admissions/{slug}`
 - `GET /admissions/{slug}/prospectus`
 - `GET /admissions/{slug}/apply`
-- `GET|POST /student/application`
+- `GET /student/application`
+- `POST /student/application/save`
+- `POST /student/applications/{id}/reapply`
 - `POST /student/application/document`
+- `POST /student/application/documents/continue`
 - `POST /student/application/submit`
 - `POST /student/application/corrections/resubmit`
 - `GET|POST /student/payments`
@@ -138,7 +142,7 @@ The super-admin receives the full permission set. Admission officers manage oper
 - Publication captures a SHA-256 configuration version and freezes application-level editing.
 - Close/archive are explicit lifecycle transitions; date-derived `scheduled`, `live`, `closing_soon` and `closed` states are server-calculated.
 - Duplication copies configuration but never applications, payments, allocations or filled-seat counts.
-- Applicants start one application per cycle, retain multiple-cycle history and bind to the published configuration version.
+- Applicants start one active attempt per cycle. While the cycle remains open, a rejected latest attempt can create a separate linked draft that copies editable data and documents; every prior attempt remains unchanged and each submission binds to its published configuration version.
 - Programme choices are ranked and revalidated against the cycle on submission.
 - Dynamic custom fields support text, textarea, email, telephone, number, date, select, radio, checkbox and multiselect controls. Simple JSON `all`/`any` conditional rules are enforced in rendering and server validation.
 - File fields bind to protected document types rather than accepting arbitrary public uploads.

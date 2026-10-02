@@ -18,6 +18,7 @@ use App\Services\ApplicationSnapshotService;
 use App\Services\AuditService;
 use App\Services\CorrectionService;
 use App\Services\EligibilityService;
+use App\Services\ReapplicationService;
 use App\Services\UploadService;
 use RuntimeException;
 
@@ -38,7 +39,8 @@ final class ApplicantController extends Controller
             $timeline = $db->all('SELECT ash.*, CONCAT(u.first_name, " ", u.last_name) AS changed_by_name FROM application_status_history ash LEFT JOIN users u ON u.id = ash.changed_by WHERE ash.application_id = :id ORDER BY ash.created_at DESC', ['id' => $application['id']]);
         }
         $profile = $db->fetch('SELECT * FROM applicant_profiles WHERE user_id = :user', ['user' => Auth::id()]);
-        $this->view('student/dashboard', compact('application', 'applications', 'documents', 'timeline', 'notifications', 'notices', 'profile') + ['title' => 'My dashboard'], 'student');
+        $canReapply=$application?$this->canReapply($application):false;
+        $this->view('student/dashboard', compact('application', 'applications', 'documents', 'timeline', 'notifications', 'notices', 'profile', 'canReapply') + ['title' => 'My dashboard'], 'student');
     }
 
     public function startApplication(string $slug): never
@@ -52,7 +54,7 @@ final class ApplicantController extends Controller
         $programSlug=trim((string)($_GET['program']??$_SESSION['intended_program_slug']??''));
         $db=Database::get();
         $applicationId=$db->transaction(function (Database $db) use ($cycle,$programSlug): int {
-            $existing=$db->fetch('SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle FOR UPDATE',['user'=>Auth::id(),'cycle'=>$cycle['id']]);
+            $existing=$db->fetch('SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1 FOR UPDATE',['user'=>Auth::id(),'cycle'=>$cycle['id']]);
             if ($existing) $id=(int)$existing['id'];
             else {
                 $version=$db->fetch("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status='published' ORDER BY version_no DESC LIMIT 1",['cycle'=>$cycle['id']]);
@@ -73,6 +75,19 @@ final class ApplicantController extends Controller
         unset($_SESSION['intended_cycle_slug'],$_SESSION['intended_program_slug']);
         AuditService::log('application_started','application',$applicationId,[],['cycle_id'=>$cycle['id']]);
         $this->redirect('student/application');
+    }
+
+    public function reapply(string $id): never
+    {
+        try {
+            $application=(new ReapplicationService())->createAttempt((int)$id,(int)Auth::id());
+            $_SESSION['active_application_id']=(int)$application['id'];
+            Flash::set('success','A new application attempt was created with your existing details and documents. Review each step, then submit it again.');
+            $this->redirect('student/application#personal');
+        } catch (RuntimeException $exception) {
+            Flash::set('warning',$exception->getMessage());
+            $this->redirect('student/dashboard');
+        }
     }
 
     public function application(): void
@@ -106,7 +121,8 @@ final class ApplicantController extends Controller
         if($application['status']==='correction_required') { $fieldTargets=[];$sectionTargets=[];$allCustom=false;foreach($correction['items']??[] as $item){if($item['status']!=='open')continue;if($item['target_type']==='field')$fieldTargets[]=$item['target_key'];if($item['target_type']==='section'){if($item['target_key']==='custom')$allCustom=true;else $sectionTargets[]=$item['target_key'];}}foreach($formFields as &$configuredField){$configuredField['is_editable']=$allCustom||in_array($configuredField['field_key'],$fieldTargets,true)||in_array($configuredField['configured_section_key'],$sectionTargets,true);if($configuredField['is_editable'])$configuredField['is_visible']=true;}unset($configuredField); }
         $aadhaarPolicy = $this->aadhaarPolicy($application);
         $identityCollectionOpen = $this->identityCollectionOpen($aadhaarPolicy, (string) $application['status']);
-        $this->view('student/application', compact('application', 'profile', 'address', 'guardian', 'education', 'exam', 'programs', 'preferences', 'requirements', 'documents', 'formSections', 'formFields', 'customResponses', 'categories', 'correction', 'aadhaarPolicy', 'identityCollectionOpen') + ['title' => 'My application'], 'student');
+        $canReapply=$this->canReapply($application);
+        $this->view('student/application', compact('application', 'profile', 'address', 'guardian', 'education', 'exam', 'programs', 'preferences', 'requirements', 'documents', 'formSections', 'formFields', 'customResponses', 'categories', 'correction', 'aadhaarPolicy', 'identityCollectionOpen', 'canReapply') + ['title' => 'My application'], 'student');
     }
 
     public function saveApplication(): never
@@ -114,6 +130,12 @@ final class ApplicantController extends Controller
         $application = $this->editableApplication();
         $db = Database::get();
         $section = (string) $this->input('section', 'personal');
+        $sectionOrder=['personal','address','guardian','academic','preferences','custom','documents','review'];
+        $hasCustomFields=(int)$db->scalar("SELECT COUNT(*) FROM admission_form_fields WHERE admission_cycle_id=:cycle AND status='active' AND (canonical_binding IS NULL OR field_type='file')",['cycle'=>$application['admission_cycle_id']])>0;
+        $nextBySection=['personal'=>'address','address'=>'guardian','guardian'=>'academic','academic'=>'preferences','preferences'=>$hasCustomFields?'custom':'documents','custom'=>'documents'];
+        $requestedNext=trim((string)$this->input('continue_to',$section));
+        $redirectSection=($requestedNext===$section||$requestedNext===($nextBySection[$section]??null))?$requestedNext:$section;
+        $saved=false;
         if ($application['status']==='correction_required') {
             $correction=(new CorrectionService())->openForApplication((int)$application['id']);
             $allowed=false;
@@ -124,7 +146,7 @@ final class ApplicantController extends Controller
             if (!$allowed) { Flash::set('warning','This section was not included in the active correction request.'); $this->redirect('student/application#'.$section); }
         }
         try {
-            $db->transaction(function (Database $db) use ($section, $application): void {
+            $db->transaction(function (Database $db) use ($section, $application, $redirectSection, $sectionOrder): void {
                 switch ($section) {
                     case 'personal':
                         $this->savePersonal($db);
@@ -148,7 +170,8 @@ final class ApplicantController extends Controller
                         throw new RuntimeException('Unknown form section.');
                 }
                 $completion = $this->completionScore((int) $application['id']);
-                $db->update('applications', ['completion_percentage' => $completion, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $application['id']]);
+                $currentStep=array_search($redirectSection,$sectionOrder,true);
+                $db->update('applications', ['completion_percentage' => $completion, 'current_step'=>$currentStep===false?1:$currentStep+1, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $application['id']]);
             });
             if ($application['status']==='correction_required') {
                 $corrections=new CorrectionService();
@@ -159,13 +182,14 @@ final class ApplicantController extends Controller
                     $corrections->markResponded((int)$application['id'],(int)Auth::id(),'field',(string)$field['id']);
                 }
             }
-            AuditService::log('application_section_saved', 'application', $application['id'], [], ['section' => $section]);
-            Flash::set('success', ucfirst($section) . ' details saved.');
+            AuditService::log('application_section_saved', 'application', $application['id'], [], ['section' => $section, 'continue_to'=>$redirectSection]);
+            Flash::set('success', ucfirst($section) . ' details saved.'.($redirectSection!==$section?' Continue with the next step.':''));
+            $saved=true;
         } catch (RuntimeException $exception) {
             Flash::withInput($_POST);
             Flash::set('warning', $exception->getMessage());
         }
-        $this->redirect('student/application#' . $section);
+        $this->redirect('student/application#' . ($saved?$redirectSection:$section));
     }
 
     public function submitApplication(): never
@@ -241,6 +265,7 @@ final class ApplicantController extends Controller
 
     public function uploadDocument(): never
     {
+        $async=strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest';
         $application=$this->editableApplication();
         $typeId=(int)$this->input('document_type_id');
         $db=Database::get();
@@ -249,14 +274,15 @@ final class ApplicantController extends Controller
             WHERE cdr.admission_cycle_id=:cycle AND cdr.document_type_id=:type AND dt.status='active'
             AND (cdr.program_id IS NULL OR EXISTS (SELECT 1 FROM application_preferences pref JOIN cycle_programs cp ON cp.id=pref.cycle_program_id WHERE pref.application_id=:application AND cp.program_id=cdr.program_id))
             AND (cdr.category IS NULL OR cdr.category=:category) ORDER BY cdr.id LIMIT 1",['cycle'=>$application['admission_cycle_id'],'type'=>$typeId,'application'=>$application['id'],'category'=>$profile['category']??'']);
-        if (!$requirement||empty($_FILES['document'])) { Flash::set('warning','Select a valid configured document and file.'); $this->redirect('student/application#documents'); }
+        if (!$requirement||empty($_FILES['document'])) $this->documentUploadFailure('Select a valid configured document and file.',$async);
         if ($application['status']==='correction_required') {
             $correction=(new CorrectionService())->openForApplication((int)$application['id']);
             $permitted=false;
             foreach ($correction['items']??[] as $item) if ($item['status']==='open'&&$item['target_type']==='document'&&in_array((string)$item['target_key'],[(string)$typeId,(string)$requirement['code']],true)) $permitted=true;
-            if (!$permitted) { Flash::set('warning','This document was not included in the active correction request.'); $this->redirect('student/application#documents'); }
+            if (!$permitted) $this->documentUploadFailure('This document was not included in the active correction request.',$async);
         }
         $stored=null;
+        $persisted=false;
         try {
             $allowed=array_values(array_filter(array_map('trim',explode(',',(string)$requirement['allowed_mimes']))));
             $stored=(new UploadService())->store($_FILES['document'],'applications/'.$application['id'],$allowed,(int)$requirement['max_size_mb']);
@@ -269,17 +295,50 @@ final class ApplicantController extends Controller
                 $db->insert('application_document_versions',['application_document_id'=>$id,'revision_no'=>$revision,'path'=>$stored['path'],'original_name'=>$stored['original_name'],'mime_type'=>$stored['mime_type'],'size_bytes'=>$stored['size_bytes'],'checksum_sha256'=>$stored['checksum_sha256'],'status'=>'pending','review_remarks'=>null,'reviewed_by'=>null,'reviewed_at'=>null,'uploaded_by'=>Auth::id(),'created_at'=>date('Y-m-d H:i:s')]);
                 return $id;
             });
+            $persisted=true;
+            $db->update('applications',['completion_percentage'=>$this->completionScore((int)$application['id']),'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$application['id']]);
             if ($application['status']==='correction_required') {
                 (new CorrectionService())->markResponded((int)$application['id'],(int)Auth::id(),'document',(string)$requirement['code']);
                 (new CorrectionService())->markResponded((int)$application['id'],(int)Auth::id(),'document',(string)$typeId);
             }
             AuditService::log('document_uploaded','application_document',$documentId,[],['revision'=>$stored?'recorded':null]);
-            Flash::set('success','Document uploaded securely. Previous revisions remain preserved.');
+            $message='Document saved automatically and securely. Previous revisions remain preserved.';
+            if($async){$document=$db->fetch('SELECT id,original_name,status,revision_no FROM application_documents WHERE id=:id',['id'=>$documentId]);$this->json(['ok'=>true,'message'=>$message,'document'=>$document,'view_url'=>url('files/document/'.$documentId)]);}
+            Flash::set('success',$message);
         } catch (RuntimeException $exception) {
+            if($persisted){
+                $message='The document was saved securely, but its progress status could not be refreshed. Reload the page before trying again.';
+                if($async){$document=$db->fetch('SELECT id,original_name,status,revision_no FROM application_documents WHERE id=:id',['id'=>$documentId]);$this->json(['ok'=>true,'message'=>$message,'document'=>$document,'view_url'=>url('files/document/'.$documentId)]);}
+                Flash::set('warning',$message);
+                $this->redirect('student/application#documents');
+            }
             if ($stored&&is_file(BASE_PATH.'/storage/private/'.$stored['path'])) @unlink(BASE_PATH.'/storage/private/'.$stored['path']);
+            if($async)$this->json(['ok'=>false,'message'=>$exception->getMessage()],422);
             Flash::set('warning',$exception->getMessage());
         }
         $this->redirect('student/application#documents');
+    }
+
+    public function continueDocuments(): never
+    {
+        $application=$this->editableApplication();
+        $db=Database::get();
+        if($application['status']==='correction_required'){
+            $correction=(new CorrectionService())->openForApplication((int)$application['id']);
+            $openDocuments=array_filter($correction['items']??[],static fn(array $item):bool=>$item['status']==='open'&&$item['target_type']==='document');
+            if($openDocuments){Flash::set('warning','Upload every document requested in the active correction before continuing.');$this->redirect('student/application#documents');}
+        }else{
+            $category=(string)($db->scalar('SELECT category FROM applicant_profiles WHERE user_id=:user',['user'=>Auth::id()])?:'');
+            $missing=(int)$db->scalar("SELECT COUNT(*) FROM cycle_document_requirements requirement WHERE requirement.admission_cycle_id=:cycle AND requirement.is_required=1 AND requirement.stage='application'
+                AND (requirement.program_id IS NULL OR EXISTS (SELECT 1 FROM application_preferences preference JOIN cycle_programs cycle_program ON cycle_program.id=preference.cycle_program_id WHERE preference.application_id=:application AND cycle_program.program_id=requirement.program_id))
+                AND (requirement.category IS NULL OR requirement.category=:category)
+                AND NOT EXISTS (SELECT 1 FROM application_documents document WHERE document.application_id=:application_document AND document.document_type_id=requirement.document_type_id)",['cycle'=>$application['admission_cycle_id'],'application'=>$application['id'],'category'=>$category,'application_document'=>$application['id']]);
+            if($missing>0){Flash::set('warning','Upload every required application-stage document before continuing.');$this->redirect('student/application#documents');}
+        }
+        $db->update('applications',['current_step'=>8,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$application['id']]);
+        AuditService::log('application_section_saved','application',$application['id'],[],['section'=>'documents','continue_to'=>'review']);
+        Flash::set('success','Documents saved. Review your application before final submission.');
+        $this->redirect('student/application#review');
     }
 
     public function payments(): void
@@ -488,6 +547,19 @@ final class ApplicantController extends Controller
         return in_array($policy, ['disabled','application','post_selection','admission'], true) ? $policy : 'disabled';
     }
 
+    private function canReapply(array $application): bool
+    {
+        if(($application['status']??'')!=='rejected')return false;
+        $latestId=(int)Database::get()->scalar('SELECT id FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1',['user'=>Auth::id(),'cycle'=>$application['admission_cycle_id']]);
+        if($latestId!==(int)$application['id'])return false;
+        return (new AdmissionCycleService())->acceptsApplications([
+            'status'=>$application['cycle_status']??'',
+            'starts_at'=>$application['cycle_starts_at']??'',
+            'ends_at'=>$application['cycle_ends_at']??'',
+            'closing_soon_hours'=>72,
+        ]);
+    }
+
     private function applicationRecord(): ?array
     {
         $db=Database::get();
@@ -496,7 +568,7 @@ final class ApplicantController extends Controller
             $record=$db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.id=:id AND a.user_id=:user',['id'=>$requested,'user'=>Auth::id()]);
             if ($record) return $record;
         }
-        return $db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.user_id=:user ORDER BY a.created_at DESC LIMIT 1',['user'=>Auth::id()]);
+        return $db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.user_id=:user ORDER BY a.created_at DESC,a.attempt_no DESC,a.id DESC LIMIT 1',['user'=>Auth::id()]);
     }
 
     private function editableApplication(): array
@@ -659,6 +731,13 @@ final class ApplicantController extends Controller
         if(isset($rule['any'])&&is_array($rule['any'])) return in_array(true,array_map(fn($item)=>$this->conditionMatches($item,$context),$rule['any']),true);
         $key=(string)($rule['field']??''); if($key==='') return true; $actual=$context[$key]??null;$expected=$rule['value']??null;$operator=(string)($rule['operator']??'eq');
         return match($operator){'eq'=>(string)$actual===(string)$expected,'neq'=>(string)$actual!==(string)$expected,'in'=>in_array((string)$actual,array_map('strval',(array)$expected),true),'not_in'=>!in_array((string)$actual,array_map('strval',(array)$expected),true),'contains'=>is_array($actual)?in_array((string)$expected,array_map('strval',$actual),true):str_contains((string)$actual,(string)$expected),'filled'=>!($actual===null||$actual===''||$actual===[]),'empty'=>$actual===null||$actual===''||$actual===[],default=>false};
+    }
+
+    private function documentUploadFailure(string $message,bool $async): never
+    {
+        if($async)$this->json(['ok'=>false,'message'=>$message],422);
+        Flash::set('warning',$message);
+        $this->redirect('student/application#documents');
     }
 
     private function completionScore(int $applicationId): int

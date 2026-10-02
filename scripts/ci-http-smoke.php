@@ -24,13 +24,13 @@ final class BrowserSession
         @unlink($this->cookies);
     }
 
-    public function request(string $method, string $path, array $data = [], bool $follow = true): array
+    public function request(string $method, string $path, array $data = [], bool $follow = true, array $headers = []): array
     {
         $curl = curl_init($this->base . $path);
         curl_setopt_array($curl, [
             CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_FOLLOWLOCATION => $follow,
             CURLOPT_MAXREDIRS => 5, CURLOPT_COOKIEJAR => $this->cookies, CURLOPT_COOKIEFILE => $this->cookies,
-            CURLOPT_TIMEOUT => 30, CURLOPT_HTTPHEADER => ['User-Agent: NCP-CI-Smoke/1.0'],
+            CURLOPT_TIMEOUT => 30, CURLOPT_HTTPHEADER => array_merge(['User-Agent: NCP-CI-Smoke/1.0'],$headers),
         ]);
         if ($method === 'POST') {
             curl_setopt($curl, CURLOPT_POST, true);
@@ -86,6 +86,16 @@ final class BrowserSession
         $response=$this->request('POST',$action,$payload);
         if($response['status']!==200||!str_contains($response['body'],$needle))throw new RuntimeException("Multipart POST {$action} failed ({$response['status']}); expected text: {$needle}");
         echo "PASS multipart POST {$action}\n";
+    }
+
+    public function postFileJsonWithCsrf(string $tokenPage,string $action,array $data,string $field,string $path,string $mime,string $name): array
+    {
+        $page=$this->request('GET',$tokenPage);if($page['status']!==200||!preg_match('/name="_token" value="([^"]+)"/',$page['body'],$match))throw new RuntimeException("CSRF token not found on {$tokenPage}.");
+        $payload=['_token'=>html_entity_decode($match[1])]+$data;$payload[$field]=new CURLFile($path,$mime,$name);
+        $response=$this->request('POST',$action,$payload,true,['X-Requested-With: XMLHttpRequest','Accept: application/json']);
+        $json=json_decode($response['body'],true);
+        if($response['status']!==200||!str_contains($response['content_type'],'application/json')||!is_array($json)||!($json['ok']??false))throw new RuntimeException("Automatic upload {$action} failed ({$response['status']}): ".($json['message']??substr($response['body'],0,300)));
+        echo "PASS automatic multipart POST {$action}\n";return $json;
     }
 
     public function postExpectStatus(string $tokenPage,string $action,array $data,int $expected): void
@@ -361,6 +371,52 @@ $admin->postWithCsrf('/admin/applications?view=board','/admin/applications/bulk/
 $batchStates=$ciDb->query('SELECT id,status FROM applications WHERE id IN (1,2) ORDER BY id')->fetchAll(PDO::FETCH_KEY_PAIR);
 if(($batchStates[1]??'')!=='eligibility_check'||($batchStates[2]??'')!=='admitted')throw new RuntimeException('Bulk workflow did not preserve the valid transition and reject the invalid transition independently.');
 echo "PASS graphical board, guided review, bulk assignment and honest partial batch validation\n";
+$sourceDocument=$ciDb->query('SELECT * FROM application_documents WHERE id='.(int)$document['id'])->fetch();
+$copyDocument=$ciDb->prepare("INSERT INTO application_documents (application_id,document_type_id,path,original_name,mime_type,size_bytes,checksum_sha256,revision_no,uploaded_by,status,review_remarks,reviewed_by,reviewed_at,uploaded_at,created_at,updated_at) VALUES (1,?,?,?,?,?,?,1,?,'verified',NULL,NULL,NULL,NOW(),NOW(),NOW())");
+$copyDocument->execute([$sourceDocument['document_type_id'],$sourceDocument['path'],$sourceDocument['original_name'],$sourceDocument['mime_type'],$sourceDocument['size_bytes'],$sourceDocument['checksum_sha256'],$sourceDocument['uploaded_by']]);
+$reapplySourceDocumentId=(int)$ciDb->lastInsertId();
+$copyVersion=$ciDb->prepare("INSERT INTO application_document_versions (application_document_id,revision_no,path,original_name,mime_type,size_bytes,checksum_sha256,status,review_remarks,reviewed_by,reviewed_at,uploaded_by,created_at) VALUES (?,1,?,?,?,?,?,'verified',NULL,NULL,NULL,?,NOW())");
+$copyVersion->execute([$reapplySourceDocumentId,$sourceDocument['path'],$sourceDocument['original_name'],$sourceDocument['mime_type'],$sourceDocument['size_bytes'],$sourceDocument['checksum_sha256'],$sourceDocument['uploaded_by']]);
+$appOneVersion=(int)$ciDb->query('SELECT status_version FROM applications WHERE id=1')->fetchColumn();
+$admin->postWithCsrf('/admin/applications/1','/admin/applications/1/status',['status'=>'rejected','remarks'=>'CI reapplication coverage','status_version'=>$appOneVersion],'Application status updated with state and seat checks');
+$ciDb->exec("UPDATE admission_cycles SET status='published',starts_at=DATE_SUB(NOW(),INTERVAL 1 DAY),ends_at=DATE_ADD(NOW(),INTERVAL 30 DAY) WHERE id=1");
+$sourceBeforeReapply=$ciDb->query("SELECT a.application_number,(SELECT COUNT(*) FROM application_status_history history WHERE history.application_id=a.id) AS history_count,(SELECT SHA2(snapshot_json,256) FROM application_submission_snapshots snapshot WHERE snapshot.application_id=a.id) AS snapshot_checksum FROM applications a WHERE a.id=1")->fetch();
+$applicant->get('/student/application?application_id=1','Create new attempt');
+$applicant->get('/student/dashboard','Reapply with existing data');
+$applicant->postWithCsrf('/student/dashboard','/student/applications/1/reapply',[],'new application attempt was created with your existing details');
+$reapplication=$ciDb->query('SELECT * FROM applications WHERE reapplied_from_application_id=1 ORDER BY id DESC LIMIT 1')->fetch();
+if(!$reapplication||$reapplication['status']!=='draft'||(int)$reapplication['attempt_no']!==2||$reapplication['application_number']!==null||(int)$ciDb->query('SELECT COUNT(*) FROM applications WHERE id=1 AND status=\'rejected\'')->fetchColumn()!==1)throw new RuntimeException('Rejected reapplication did not create a separate draft attempt while preserving its source.');
+$latestConfiguration=(int)$ciDb->query("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=1 AND status='published' ORDER BY version_no DESC LIMIT 1")->fetchColumn();
+if((int)$reapplication['configuration_version_id']!==$latestConfiguration)throw new RuntimeException('Reapplication did not bind to the latest published cycle configuration.');
+if((int)$ciDb->query("SELECT COUNT(*) FROM audit_logs WHERE action='application_reapplied' AND entity_id=".(int)$reapplication['id'])->fetchColumn()!==1)throw new RuntimeException('Reapplication audit evidence was not committed with the new attempt.');
+$sourceAfterReapply=$ciDb->query("SELECT a.application_number,(SELECT COUNT(*) FROM application_status_history history WHERE history.application_id=a.id) AS history_count,(SELECT SHA2(snapshot_json,256) FROM application_submission_snapshots snapshot WHERE snapshot.application_id=a.id) AS snapshot_checksum FROM applications a WHERE a.id=1")->fetch();
+if($sourceAfterReapply!=$sourceBeforeReapply)throw new RuntimeException('Reapplication mutated the rejected source number, history, or immutable snapshot.');
+$reapplicationId=(int)$reapplication['id'];
+$applicant->postWithCsrf('/student/dashboard','/student/applications/1/reapply',[],'newer application attempt already exists');
+if((int)$ciDb->query('SELECT COUNT(*) FROM applications WHERE user_id='.(int)$reapplication['user_id'].' AND admission_cycle_id='.(int)$reapplication['admission_cycle_id'].' AND attempt_no=2')->fetchColumn()!==1)throw new RuntimeException('Duplicate reapplication created more than one attempt 2.');
+$applicant->postWithCsrf('/student/dashboard','/student/applications/2/reapply',[],'Rejected application not found');
+if((int)$ciDb->query('SELECT COUNT(*) FROM applications WHERE reapplied_from_application_id=2')->fetchColumn()!==0)throw new RuntimeException('Applicant reapplication endpoint accepted another user’s application ID.');
+foreach(['applicant_addresses','guardians','education_records','entrance_exams','application_preferences','application_field_responses','application_documents'] as $copiedTable){$sourceCount=(int)$ciDb->query("SELECT COUNT(*) FROM {$copiedTable} WHERE application_id=1")->fetchColumn();$attemptCount=(int)$ciDb->query("SELECT COUNT(*) FROM {$copiedTable} WHERE application_id={$reapplicationId}")->fetchColumn();if($attemptCount!==$sourceCount)throw new RuntimeException("Reapplication did not copy {$copiedTable} exactly.");}
+foreach(['application_declarations','application_submission_snapshots','application_corrections','application_fee_assessments','seat_allocations','payments'] as $resetTable)if((int)$ciDb->query("SELECT COUNT(*) FROM {$resetTable} WHERE application_id={$reapplicationId}")->fetchColumn()!==0)throw new RuntimeException("Reapplication incorrectly copied {$resetTable}.");
+if($reapplication['assigned_to']!==null||$reapplication['selected_cycle_program_id']!==null||$reapplication['decision_at']!==null||$reapplication['submitted_at']!==null)throw new RuntimeException('Reapplication did not reset review, selection, decision, or submission state.');
+$copiedDocument=$ciDb->query('SELECT * FROM application_documents WHERE application_id='.$reapplicationId.' AND document_type_id='.(int)$sourceDocument['document_type_id'])->fetch();
+if(!$copiedDocument||$copiedDocument['status']!=='pending'||$copiedDocument['path']!==$sourceDocument['path']||(int)$copiedDocument['revision_no']!==1)throw new RuntimeException('Reapplication document was not safely copied for fresh review.');
+$personalPayload=['section'=>'personal','date_of_birth'=>'2008-01-15','gender'=>'female','category'=>'General','nationality'=>'Indian','blood_group'=>'B+','mother_tongue'=>'Bengali'];
+$applicant->postWithCsrf('/student/application?application_id='.$reapplicationId,'/student/application/save',$personalPayload+['continue_to'=>'review'],'Personal details saved');
+if((int)$ciDb->query('SELECT current_step FROM applications WHERE id='.$reapplicationId)->fetchColumn()!==1)throw new RuntimeException('Save & next trusted a tampered non-adjacent destination.');
+$applicant->postWithCsrf('/student/application?application_id='.$reapplicationId,'/student/application/save',$personalPayload+['continue_to'=>'address'],'Continue with the next step');
+if((int)$ciDb->query('SELECT current_step FROM applications WHERE id='.$reapplicationId)->fetchColumn()!==2)throw new RuntimeException('Save & next did not advance the persisted application step.');
+$autoUpload=tempnam(sys_get_temp_dir(),'ncp-auto-upload-');
+if(!$autoUpload||file_put_contents($autoUpload,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='))===false)throw new RuntimeException('Could not create automatic-upload fixture.');
+$autoResult=$applicant->postFileJsonWithCsrf('/student/application?application_id='.$reapplicationId,'/student/application/document',['document_type_id'=>(int)$sourceDocument['document_type_id']],'document',$autoUpload,'image/png','automatic-replacement.png');
+@unlink($autoUpload);
+if((int)($autoResult['document']['revision_no']??0)!==2||(int)$ciDb->query('SELECT COUNT(*) FROM application_document_versions WHERE application_document_id='.(int)$copiedDocument['id'])->fetchColumn()!==2)throw new RuntimeException('Automatic document replacement did not preserve its immutable revision history.');
+$applicant->postWithCsrf('/student/application?application_id='.$reapplicationId,'/student/application/documents/continue',[],'Upload every required application-stage document before continuing');
+if((int)$ciDb->query('SELECT current_step FROM applications WHERE id='.$reapplicationId)->fetchColumn()!==2)throw new RuntimeException('Document Save & next advanced despite missing required uploads.');
+$ciDb->exec("UPDATE applications SET status='rejected' WHERE id=".$newApplicationId);
+$applicant->postWithCsrf('/student/dashboard','/student/applications/'.$newApplicationId.'/reapply',[],'admission cycle is no longer accepting reapplications');
+if((int)$ciDb->query('SELECT COUNT(*) FROM applications WHERE reapplied_from_application_id='.$newApplicationId)->fetchColumn()!==0)throw new RuntimeException('A closed cycle incorrectly accepted a reapplication.');
+echo "PASS rejected reapplication lineage, open-cycle gate, copied editable data, Save & next, and automatic document persistence\n";
 $formulaUserId=(int)$ciDb->query('SELECT user_id FROM applications WHERE admission_cycle_id=1 ORDER BY id LIMIT 1')->fetchColumn();
 $originalFirstName=(string)$ciDb->query('SELECT first_name FROM users WHERE id='.$formulaUserId)->fetchColumn();
 $setFormulaName=$ciDb->prepare('UPDATE users SET first_name=? WHERE id=?');$setFormulaName->execute(['=2+2',$formulaUserId]);
