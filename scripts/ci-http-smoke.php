@@ -52,7 +52,8 @@ final class BrowserSession
     {
         $response = $this->request('GET', $path);
         if ($response['status'] !== 200 || !str_contains($response['body'], $needle)) {
-            throw new RuntimeException("GET {$path} failed ({$response['status']}); expected text: {$needle}");
+            $detail=$response['status']>=500?substr(trim(html_entity_decode(strip_tags($response['body']))),0,1200):'';
+            throw new RuntimeException("GET {$path} failed ({$response['status']}); expected text: {$needle}".($detail!==''?"; response: {$detail}":''));
         }
         echo "PASS GET {$path}\n";
     }
