@@ -222,9 +222,9 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes a rollback/forward-fix document; see `database/migrations/002_admission_management.rollback.md` and `database/migrations/003_submission_snapshot_revisions.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, and `database/migrations/004_cms_page_builder.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
-## 8. Current database map (64 tables)
+## 8. Current database map (65 tables)
 
 ### Identity, access and configuration
 
@@ -292,6 +292,7 @@ These are shared masters. Admission-module work must reuse them rather than crea
 ### Website CMS
 
 - `pages`
+- `page_sections`
 - `content_translations`
 - `notices`
 - `facilities`
@@ -485,14 +486,17 @@ English is the source/fallback. If a Bengali or Hindi field is empty, the Englis
 
 CMS-managed entities include:
 
-- core pages;
+- a page shell for every public content route, including home, programmes, admissions, contact, privacy and terms;
+- ordered `page_sections` with rich-text, image/text, feature-card, statistic, call-to-action and live-module layouts;
 - notices;
 - faculty;
 - facilities;
 - FAQs;
 - gallery items.
 
-Public routes also include programmes, admissions, contact and static privacy/terms content. Administration screens are primarily English in Release 1; do not claim full three-language translation of every staff screen.
+Each page section has independent draft/published state, stable anchor key, visual variant, ordering controls, optional CMS media, safe links and Bengali/Hindi translations with English fallback. Archiving preserves the section row and translations. A live-module section reads the existing programme, admission-cycle, notice, facility, faculty, gallery or FAQ tables rather than copying those records.
+
+Programmes and versioned admission cycles remain authoritative operational data. Their public records are composed into CMS-managed page shells but are not duplicated into a second content store. Administration and applicant workflow screens remain code-controlled and primarily English; do not claim full three-language translation of every operational screen.
 
 ## 16. Files, privacy and sensitive data
 

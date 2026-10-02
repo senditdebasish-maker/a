@@ -127,6 +127,10 @@ $router->post('/admin/support/{id}/reply', [SupportController::class, 'reply'], 
 $router->get('/admin/cms', [CmsController::class, 'index'], ['auth', 'permission:cms.view']);
 $router->get('/admin/cms/pages/{id}', [CmsController::class, 'editPage'], ['auth', 'permission:cms.edit']);
 $router->post('/admin/cms/pages/{id}', [CmsController::class, 'updatePage'], ['auth', 'permission:cms.edit']);
+$router->post('/admin/cms/pages/{id}/sections', [CmsController::class, 'storeSection'], ['auth', 'permission:cms.edit']);
+$router->post('/admin/cms/pages/{id}/sections/{sectionId}', [CmsController::class, 'updateSection'], ['auth', 'permission:cms.edit']);
+$router->post('/admin/cms/pages/{id}/sections/{sectionId}/move', [CmsController::class, 'moveSection'], ['auth', 'permission:cms.edit']);
+$router->post('/admin/cms/pages/{id}/sections/{sectionId}/archive', [CmsController::class, 'archiveSection'], ['auth', 'permission:cms.edit']);
 $router->get('/admin/cms/{module}', [CmsController::class, 'module'], ['auth', 'permission:cms.view']);
 $router->post('/admin/cms/{module}', [CmsController::class, 'storeModule'], ['auth', 'permission:cms.edit']);
 $router->post('/admin/cms/{module}/{id}', [CmsController::class, 'updateModule'], ['auth', 'permission:cms.edit']);

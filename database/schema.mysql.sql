@@ -618,6 +618,34 @@ CREATE TABLE pages (
     INDEX idx_pages_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE page_sections (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    page_id BIGINT UNSIGNED NOT NULL,
+    section_key VARCHAR(120) NOT NULL,
+    section_type VARCHAR(40) NOT NULL,
+    eyebrow VARCHAR(160) NULL,
+    title VARCHAR(255) NULL,
+    body LONGTEXT NULL,
+    image_path VARCHAR(500) NULL,
+    image_alt VARCHAR(255) NULL,
+    link_label VARCHAR(120) NULL,
+    link_url VARCHAR(500) NULL,
+    items_json LONGTEXT NULL,
+    module_key VARCHAR(60) NULL,
+    style_variant VARCHAR(40) NOT NULL DEFAULT 'light',
+    status VARCHAR(30) NOT NULL DEFAULT 'draft',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_by BIGINT UNSIGNED NULL,
+    updated_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uq_page_section_key (page_id, section_key),
+    INDEX idx_page_sections_public (page_id, status, sort_order),
+    CONSTRAINT fk_page_sections_page FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+    CONSTRAINT fk_page_sections_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_page_sections_updater FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE content_translations (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     entity_type VARCHAR(80) NOT NULL,
@@ -1064,4 +1092,5 @@ ALTER TABLE payments
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('001_initial_schema', 'Initial clean-install schema', NULL, 1, NULL, NOW());
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('002_admission_management', 'Admission management schema included by clean installer', NULL, 1, NULL, NOW());
 INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('003_submission_snapshot_revisions', 'Immutable submission revision schema included by clean installer', NULL, 1, NULL, NOW());
+INSERT INTO schema_migrations (version, description, checksum_sha256, batch, execution_ms, applied_at) VALUES ('004_cms_page_builder', 'CMS page builder schema included by clean installer', NULL, 1, NULL, NOW());
 SET FOREIGN_KEY_CHECKS = 1;

@@ -56,7 +56,7 @@ foreach ($routes as $route) {
     if (!$reflection->isPublic()) throw new RuntimeException("Non-public handler {$class}::{$action} for {$key}");
 }
 
-if ($adminCount !== 65) throw new RuntimeException("Expected 65 protected admin routes, found {$adminCount}.");
+if ($adminCount !== 69) throw new RuntimeException("Expected 69 protected admin routes, found {$adminCount}.");
 if ($admissionCount !== 39) throw new RuntimeException("Expected 39 admission/application/payment/report admin routes, found {$admissionCount}.");
 
 $routerSource = file_get_contents(BASE_PATH . '/app/Core/Router.php') ?: '';
