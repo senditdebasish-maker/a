@@ -182,11 +182,14 @@ GitHub Actions runs:
 3. PHP syntax lint on PHP 8.1, 8.2 and 8.3.
 4. Clean MySQL/MariaDB schema import (65 tables).
 5. Production Seeder integrity checks.
-6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002 and 003.
+6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002–005, including attempt fields, replacement uniqueness and self-lineage.
 7. Admission lifecycle, targeted correction, eligibility and immutable snapshot revision workflow checks.
-8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes.
-9. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
-10. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes on MySQL 8.0 and MariaDB 10.4.
+9. Reapplication ownership, latest-attempt and open-cycle gates; source immutability; copied/reset data; configuration version; duplicate-attempt prevention; Save & next; and automatic replacement revision checks.
+10. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
+11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+
+Authoritative green run: `37051086121` at commit `e162c64`.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers and the institution's exact reservation/eligibility policy.
 
@@ -218,6 +221,7 @@ MySQL DDL auto-commits. The preferred rollback is a forward fix while retaining 
 - `database/migrations/002_admission_management.rollback.md`
 - `database/migrations/003_submission_snapshot_revisions.rollback.md`
 - `database/migrations/004_cms_page_builder.rollback.md`
+- `database/migrations/005_application_reapply_attempts.rollback.md`
 
 Do not drop admission tables or delete application/snapshot records in production. If an upgrade fails, keep maintenance mode active, capture the error and schema state, restore only from the verified backup when a forward fix is not viable, and reconcile uploaded private files created after that backup.
 

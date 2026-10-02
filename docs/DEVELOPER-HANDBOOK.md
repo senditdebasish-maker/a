@@ -1040,16 +1040,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current validated Release 1 baseline, including the graphical admin application workflow, is:
+The current validated Release 1 baseline, including the graphical admin workflow, rejected-application attempts, stepwise Save & next form and automatic revisioned uploads, is:
 
 ```text
-28f9090 Align batch smoke assertion with workflow fixture
+e162c64 Use published configuration for seeded admissions
 ```
 
-The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install tests on MySQL 8.0 and MariaDB 10.4, including the complete HTTP/PDF suite and graphical-workflow RBAC/batch coverage:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, reapplication ownership/open-cycle/lineage/reset checks, section progression, automatic upload revision history, and graphical-workflow RBAC/batch coverage:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/37044001201
+https://github.com/senditdebasish-maker/a/actions/runs/37051086121
 ```
 
 Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.
