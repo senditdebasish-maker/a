@@ -11,13 +11,15 @@ return [
         $m->addColumn('applications', 'attempt_no', 'SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER admission_cycle_id');
         $m->addColumn('applications', 'reapplied_from_application_id', 'BIGINT UNSIGNED NULL AFTER attempt_no');
 
+        // Add the replacement user-leading index before dropping the legacy one: existing
+        // foreign keys may currently depend on uq_user_cycle as their supporting index.
+        $m->addIndex('applications', 'idx_applications_user_cycle', '`user_id`,`admission_cycle_id`,`created_at`');
         if ($m->indexExists('applications', 'uq_user_cycle')) {
             $m->execute('ALTER TABLE applications DROP INDEX uq_user_cycle', [], 'DROP obsolete one-application-per-cycle unique index');
         } else {
             $m->note('SKIP obsolete index uq_user_cycle is already absent');
         }
         $m->addIndex('applications', 'uq_user_cycle_attempt', '`user_id`,`admission_cycle_id`,`attempt_no`', true);
-        $m->addIndex('applications', 'idx_applications_user_cycle', '`user_id`,`admission_cycle_id`,`created_at`');
         $m->addIndex('applications', 'idx_applications_reapplied_from', '`reapplied_from_application_id`');
         $m->addForeignKey('applications', 'fk_applications_reapplied_from', 'FOREIGN KEY (`reapplied_from_application_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL');
     },
