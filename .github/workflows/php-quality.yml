@@ -26,6 +26,8 @@ jobs:
       - run: composer install --no-interaction --no-progress --prefer-dist
       - name: Lint PHP files
         run: find app config database public resources routes scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Audit CSS assets and layout references
+        run: php scripts/ci-css-audit.php
 
   database-smoke:
     name: database-smoke (${{ matrix.database.name }})

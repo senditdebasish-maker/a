@@ -110,6 +110,17 @@ final class BrowserSession
 
 $public = new BrowserSession($base);
 foreach ([
+    '/assets/css/app.css'=>'--teal:',
+    '/assets/css/portal.css'=>'.portal-shell',
+    '/assets/css/portal-extra.css'=>'.cms-module-layout',
+    '/assets/css/ui-polish.css'=>'forced-colors:active',
+    '/assets/css/admissions-admin.css'=>'.admission-workspace-nav',
+] as $stylesheet=>$needle){
+    $asset=$public->request('GET',$stylesheet);
+    if($asset['status']!==200||!str_contains($asset['content_type'],'text/css')||!str_contains($asset['body'],$needle))throw new RuntimeException("Stylesheet {$stylesheet} was not served correctly.");
+}
+echo "PASS production stylesheet delivery\n";
+foreach ([
     '/' => 'Learn the science', '/programs' => 'Pharmacy programmes', '/admissions' => 'Your next step',
     '/admissions/undergraduate-admissions-2027-28' => 'Choose and rank your preferences',
     '/facilities' => 'Spaces that invite', '/faculty' => 'Guidance shaped', '/notices' => 'Notices &',
