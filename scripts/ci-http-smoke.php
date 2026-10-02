@@ -251,7 +251,7 @@ echo "PASS every configured admission form widget\n";
 
 $uploadPath=tempnam(sys_get_temp_dir(),'ncp-upload-');
 if(!$uploadPath||file_put_contents($uploadPath,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='))===false)throw new RuntimeException('Could not create upload fixture.');
-$applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$uploadPath,'image/png','ci-photo.png','Document uploaded securely');
+$applicant->postFileWithCsrf('/student/application','/student/application/document',['document_type_id'=>1],'document',$uploadPath,'image/png','ci-photo.png','Document saved automatically and securely');
 $document=$ciDb->query('SELECT * FROM application_documents WHERE application_id='.$newApplicationId.' AND document_type_id=1')->fetch();
 if(!$document||(int)$document['revision_no']!==1||(int)$ciDb->query('SELECT COUNT(*) FROM application_document_versions WHERE application_document_id='.(int)$document['id'])->fetchColumn()!==1)throw new RuntimeException('Protected document upload and immutable revision were not recorded.');
 $invalidUpload=tempnam(sys_get_temp_dir(),'ncp-invalid-');
