@@ -94,16 +94,22 @@ jobs:
           BACKUP_RETENTION_DAYS=30
           REQUIRE_STAFF_MFA=false
           ENV
+      - name: Audit admin routes and permissions
+        run: php scripts/ci-route-audit.php
+      - name: Preflight clean seeded database
+        run: php scripts/admissions-preflight.php
       - name: Exercise existing-install admission migration
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e 'CREATE DATABASE ncp_upgrade CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
           mysql -h 127.0.0.1 -uroot -proot ncp_upgrade < database/baselines/001_initial_schema.mysql.sql
           DB_DATABASE=ncp_upgrade php scripts/ci-migration-smoke.php seed
           sed -i 's/DB_DATABASE=ncp_test/DB_DATABASE=ncp_upgrade/' .env
+          php scripts/admissions-preflight.php
           php scripts/migrate.php --dry-run
           php scripts/migrate.php --confirm=APPLY --backup-confirmed
           php scripts/migrate.php --confirm=APPLY --backup-confirmed | grep 'up to date'
           DB_DATABASE=ncp_upgrade php scripts/ci-migration-smoke.php verify
+          php scripts/admissions-preflight.php
           sed -i 's/DB_DATABASE=ncp_upgrade/DB_DATABASE=ncp_test/' .env
       - name: Exercise admission workflow invariants
         run: php scripts/ci-admission-workflow.php
