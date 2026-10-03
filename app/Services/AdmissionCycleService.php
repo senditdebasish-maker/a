@@ -70,9 +70,14 @@ final class AdmissionCycleService
         if (!$cycle) throw new RuntimeException('Admission cycle not found.');
         $errors=[]; $warnings=[];
         if (trim((string)$cycle['name'])==='') $errors[]='Cycle name is required.';
+        if (trim((string)($cycle['code']??''))==='') $errors[]='Cycle code is required.';
         if (trim((string)$cycle['slug'])==='') $errors[]='A unique public slug is required.';
         if (strtotime((string)$cycle['ends_at'])<=strtotime((string)$cycle['starts_at'])) $errors[]='Closing date must be after opening date.';
         if ($cycle['correction_deadline'] && strtotime((string)$cycle['correction_deadline'])<strtotime((string)$cycle['ends_at'])) $errors[]='Correction deadline cannot precede the application deadline.';
+        if (trim((string)($cycle['summary']??''))==='') {
+            if (($cycle['status']??'draft')==='draft') $errors[]='A public admission summary is required.';
+            else $warnings[]='This legacy published cycle has no public summary; duplicate it before future reuse.';
+        }
         if (trim((string)$cycle['instructions'])==='') $errors[]='Applicant instructions are required.';
         if (trim((string)$cycle['declaration_text'])==='') $errors[]='Applicant declaration text is required.';
         if (trim((string)$cycle['application_number_prefix'])==='') $errors[]='Application number prefix is required.';

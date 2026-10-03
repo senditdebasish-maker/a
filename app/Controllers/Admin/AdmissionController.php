@@ -58,8 +58,8 @@ final class AdmissionController extends Controller
             $id=$db->insert('admission_cycles',$data+['status'=>'draft','configuration_version'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
             foreach([['personal','Personal details',10],['address','Address',20],['guardian','Parent / guardian',30],['academic','Academic history',40],['preferences','Programme preferences',50]] as [$key,$title,$sort]) $db->insert('admission_form_sections',['admission_cycle_id'=>$id,'section_key'=>$key,'title'=>$title,'description'=>null,'sort_order'=>$sort,'status'=>'active','created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('admission_cycle_created','admission_cycle',$id,[],$data);
-            Flash::set('success','Draft admission cycle created. Configure every section before publishing.');
-            $this->redirect('admin/admissions/'.$id);
+            Flash::set('success','Draft admission cycle created. Continue with Step 2: programmes.');
+            $this->redirect('admin/admissions/'.$id.'#programmes');
         } catch(RuntimeException $exception) { Flash::withInput($_POST); Flash::set('warning',$exception->getMessage()); $this->redirect('admin/admissions/create'); }
     }
 
@@ -95,6 +95,7 @@ final class AdmissionController extends Controller
 
     public function update(string $id): never
     {
+        $continueTo='notice';
         try {
             $cycle=$this->draftCycle((int)$id); $data=$this->cycleData(); $db=Database::get();
             if($db->fetch('SELECT id FROM admission_cycles WHERE (code=:code OR slug=:slug) AND id<>:id',['code'=>$data['code'],'slug'=>$data['slug'],'id'=>$cycle['id']])) throw new RuntimeException('Cycle code and slug must be unique.');
@@ -102,16 +103,18 @@ final class AdmissionController extends Controller
             if(!empty($_FILES['prospectus']['name'])) { $stored=(new UploadService())->store($_FILES['prospectus'],'prospectuses/'.$cycle['id'],['application/pdf'],10); $data+=['prospectus_path'=>$stored['path'],'prospectus_original_name'=>$stored['original_name'],'prospectus_mime_type'=>$stored['mime_type']]; }
             $db->update('admission_cycles',$data+['updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$cycle['id']]);
             AuditService::log('admission_cycle_updated','admission_cycle',$cycle['id'],$cycle,$data);
-            Flash::set('success','Admission cycle settings saved.');
-        } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
-        $this->redirect('admin/admissions/'.$id);
+            $requested=(string)($_POST['continue_to']??'notice');
+            $continueTo=in_array($requested,['notice','programmes'],true)?$requested:'notice';
+            Flash::set('success','Admission cycle settings saved.'.($continueTo==='programmes'?' Continue with programme setup.':''));
+        } catch(RuntimeException $exception){ Flash::withInput($_POST); Flash::set('warning',$exception->getMessage()); }
+        $this->redirect('admin/admissions/'.$id.'#'.$continueTo);
     }
 
     public function publish(string $id): never
     {
         try { $result=(new AdmissionCycleService())->publish((int)$id,(int)Auth::id()); Flash::set('success','Cycle published with immutable configuration version '.$result['version_no'].'.'); }
         catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
-        $this->redirect('admin/admissions/'.$id);
+        $this->redirect('admin/admissions/'.$id.'#review-publish');
     }
 
     public function close(string $id): never
@@ -192,12 +195,12 @@ final class AdmissionController extends Controller
             });
             AuditService::log('seat_matrix_updated','cycle_program',$cp['id'],[],['seat_total'=>$capacity]); Flash::set('success','Seat matrix saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
-        $this->redirect('admin/admissions/'.$id.'#seats');
+        $this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function deleteSeat(string $id,string $programId,string $seatId): never
     {
-        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$seat=$db->fetch('SELECT sm.* FROM seat_matrix sm JOIN cycle_programs cp ON cp.id=sm.cycle_program_id WHERE sm.id=:seat AND sm.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['seat'=>(int)$seatId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$seat)throw new RuntimeException('Seat row not found.');if((int)$seat['filled_seats']>0)throw new RuntimeException('A seat row with active allocations cannot be removed.');$remaining=(int)$db->scalar('SELECT COALESCE(SUM(seats),0) FROM seat_matrix WHERE cycle_program_id=:program AND id<>:seat',['program'=>(int)$programId,'seat'=>(int)$seatId]);if($remaining<1)throw new RuntimeException('A programme must retain at least one positive seat row.');$db->transaction(function(Database $db)use($seat,$programId,$remaining):void{$db->query('DELETE FROM seat_matrix WHERE id=:id',['id'=>$seat['id']]);$db->update('cycle_programs',['seat_capacity'=>$remaining,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>(int)$programId]);});AuditService::log('seat_matrix_row_removed','seat_matrix',$seat['id'],$seat,[]);Flash::set('success','Seat row removed and programme capacity recalculated.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$seat=$db->fetch('SELECT sm.* FROM seat_matrix sm JOIN cycle_programs cp ON cp.id=sm.cycle_program_id WHERE sm.id=:seat AND sm.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['seat'=>(int)$seatId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$seat)throw new RuntimeException('Seat row not found.');if((int)$seat['filled_seats']>0)throw new RuntimeException('A seat row with active allocations cannot be removed.');$remaining=(int)$db->scalar('SELECT COALESCE(SUM(seats),0) FROM seat_matrix WHERE cycle_program_id=:program AND id<>:seat',['program'=>(int)$programId,'seat'=>(int)$seatId]);if($remaining<1)throw new RuntimeException('A programme must retain at least one positive seat row.');$db->transaction(function(Database $db)use($seat,$programId,$remaining):void{$db->query('DELETE FROM seat_matrix WHERE id=:id',['id'=>$seat['id']]);$db->update('cycle_programs',['seat_capacity'=>$remaining,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>(int)$programId]);});AuditService::log('seat_matrix_row_removed','seat_matrix',$seat['id'],$seat,[]);Flash::set('success','Seat row removed and programme capacity recalculated.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function saveEligibility(string $id, string $programId): never
@@ -210,12 +213,12 @@ final class AdmissionController extends Controller
             $ruleId=(int)($_POST['rule_id']??0); if($ruleId){ if(!(int)$db->scalar('SELECT COUNT(*) FROM eligibility_rules WHERE id=:id AND cycle_program_id=:program',['id'=>$ruleId,'program'=>$cp['id']])) throw new RuntimeException('Eligibility rule not found.'); $db->update('eligibility_rules',$data,'id=:id',['id'=>$ruleId]); } else $ruleId=$db->insert('eligibility_rules',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('eligibility_rule_saved','eligibility_rule',$ruleId,[],$data); Flash::set('success','Eligibility rule saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
-        $this->redirect('admin/admissions/'.$id.'#eligibility');
+        $this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function deleteEligibility(string $id,string $programId,string $ruleId): never
     {
-        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$rule=$db->fetch('SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id=er.cycle_program_id WHERE er.id=:rule AND er.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['rule'=>(int)$ruleId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$rule)throw new RuntimeException('Eligibility rule not found.');$db->query('DELETE FROM eligibility_rules WHERE id=:id',['id'=>$rule['id']]);AuditService::log('eligibility_rule_removed','eligibility_rule',$rule['id'],$rule,[]);Flash::set('success','Eligibility rule removed. Publication readiness will require another rule if none remain.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$rule=$db->fetch('SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id=er.cycle_program_id WHERE er.id=:rule AND er.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['rule'=>(int)$ruleId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$rule)throw new RuntimeException('Eligibility rule not found.');$db->query('DELETE FROM eligibility_rules WHERE id=:id',['id'=>$rule['id']]);AuditService::log('eligibility_rule_removed','eligibility_rule',$rule['id'],$rule,[]);Flash::set('success','Eligibility rule removed. Publication readiness will require another rule if none remain.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function saveSection(string $id): never
@@ -293,14 +296,15 @@ final class AdmissionController extends Controller
 
     public function deleteFee(string $id,string $programId,string $feeId): never
     {
-        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$fee=$db->fetch('SELECT afr.* FROM admission_fee_rules afr JOIN cycle_programs cp ON cp.id=afr.cycle_program_id WHERE afr.id=:fee AND afr.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['fee'=>(int)$feeId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$fee)throw new RuntimeException('Fee rule not found.');if((int)$db->scalar('SELECT COUNT(*) FROM application_fee_assessments WHERE fee_rule_id=:fee',['fee'=>$fee['id']])>0)throw new RuntimeException('This fee rule already has assessments and cannot be deleted. Set it inactive instead.');$db->query('DELETE FROM admission_fee_rules WHERE id=:id',['id'=>$fee['id']]);AuditService::log('admission_fee_rule_removed','admission_fee_rule',$fee['id'],$fee,[]);Flash::set('success','Draft fee rule removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$fee=$db->fetch('SELECT afr.* FROM admission_fee_rules afr JOIN cycle_programs cp ON cp.id=afr.cycle_program_id WHERE afr.id=:fee AND afr.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['fee'=>(int)$feeId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$fee)throw new RuntimeException('Fee rule not found.');if((int)$db->scalar('SELECT COUNT(*) FROM application_fee_assessments WHERE fee_rule_id=:fee',['fee'=>$fee['id']])>0)throw new RuntimeException('This fee rule already has assessments and cannot be deleted. Set it inactive instead.');$db->query('DELETE FROM admission_fee_rules WHERE id=:id',['id'=>$fee['id']]);AuditService::log('admission_fee_rule_removed','admission_fee_rule',$fee['id'],$fee,[]);Flash::set('success','Draft fee rule removed.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#fees');
     }
 
     private function cycleData(): array
     {
-        $validator=new Validator(); $errors=$validator->validate($_POST,['academic_session_id'=>'required|numeric','name'=>'required|max:160','code'=>'required|max:50','slug'=>'required|max:190','starts_at'=>'required|date','ends_at'=>'required|date','application_number_prefix'=>'required|max:30']);
+        $validator=new Validator(); $errors=$validator->validate($_POST,['academic_session_id'=>'required|numeric','name'=>'required|max:160','code'=>'required|max:50','slug'=>'required|max:190','starts_at'=>'required|date','ends_at'=>'required|date','application_number_prefix'=>'required|max:30','summary'=>'required|max:1000','instructions'=>'required|max:10000','declaration_text'=>'required|max:10000']);
         if($errors) throw new RuntimeException(implode(' ',array_map(fn($messages)=>$messages[0],$errors)));
         if(strtotime((string)$_POST['ends_at'])<=strtotime((string)$_POST['starts_at'])) throw new RuntimeException('Closing date must be after opening date.');
+        if(!empty($_POST['correction_deadline'])&&strtotime((string)$_POST['correction_deadline'])<strtotime((string)$_POST['ends_at'])) throw new RuntimeException('Correction deadline cannot be before the application closing date.');
         if(!Database::get()->fetch('SELECT id FROM academic_sessions WHERE id=:id',['id'=>(int)$_POST['academic_session_id']])) throw new RuntimeException('Academic session not found.');
         return ['academic_session_id'=>(int)$_POST['academic_session_id'],'name'=>trim((string)$_POST['name']),'code'=>strtoupper(trim((string)$_POST['code'])),'slug'=>$this->slug((string)$_POST['slug']), 'summary'=>trim((string)($_POST['summary']??''))?:null,'starts_at'=>date('Y-m-d H:i:s',strtotime((string)$_POST['starts_at'])),'ends_at'=>date('Y-m-d H:i:s',strtotime((string)$_POST['ends_at'])),'correction_deadline'=>($_POST['correction_deadline']??'')!==''?date('Y-m-d H:i:s',strtotime((string)$_POST['correction_deadline'])):null,'instructions'=>trim((string)($_POST['instructions']??'')),'declaration_text'=>trim((string)($_POST['declaration_text']??'')),'application_number_prefix'=>trim((string)$_POST['application_number_prefix']),'application_fee_strategy'=>'first_preference','max_program_preferences'=>max(1,min(10,(int)($_POST['max_program_preferences']??3))),'closing_soon_hours'=>max(0,min(720,(int)($_POST['closing_soon_hours']??72)))];
     }
