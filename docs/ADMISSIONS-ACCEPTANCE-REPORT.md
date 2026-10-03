@@ -173,6 +173,7 @@ Implemented controls:
 - Transaction locks and optimistic `status_version` checks around decisions.
 - Server-derived cycle availability, programme membership, status transitions, eligibility, assessments, fees and allocation capacity.
 - Authentication mail bodies containing verification/reset/MFA secrets are redacted from `mail_logs`; only safe metadata/checksums remain.
+- Authenticated SMTP can be configured and tested from the permission-protected Admin Settings workspace. The password uses AES-256-GCM at rest, is write-only in the interface, is excluded from old-input and audit data, and safely overrides the `.env` fallback without disabling TLS certificate verification.
 - CSV cells beginning with spreadsheet formula/control prefixes receive a leading apostrophe.
 
 No production database or deployment credentials were available in the development environment, so the actual installation still requires preflight, backup verification and post-migration checks.
@@ -192,6 +193,7 @@ GitHub Actions runs:
 9. Reapplication ownership, latest-attempt and open-cycle gates; source immutability; copied/reset data; configuration version; duplicate-attempt prevention; Save & next; and automatic replacement revision checks.
 10. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
 11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+12. Admin SMTP settings rendering, encrypted private password storage, blank-password preservation, audit/HTML secret exclusion and test-route delivery-mode validation.
 
 Authoritative green run: `37051086121` at commit `e162c64`.
 

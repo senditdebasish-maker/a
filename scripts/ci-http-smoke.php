@@ -379,10 +379,34 @@ foreach ([
     '/admin/cms/notices' => 'Notices records', '/admin/cms/faculty' => 'Faculty directory records',
     '/admin/cms/facilities' => 'Facilities records', '/admin/cms/faqs' => 'Frequently asked questions records',
     '/admin/cms/gallery' => 'Gallery records', '/admin/support' => 'Applicant support',
-    '/admin/enquiries' => 'Contact inbox', '/admin/settings' => 'College & admission settings',
+    '/admin/enquiries' => 'Contact inbox', '/admin/settings' => 'College, email &amp; admission settings',
     '/admin/users' => 'Users & roles', '/admin/roles' => 'Roles & permissions',
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
+$admin->get('/admin/settings#email','Email &amp; SMTP delivery');
+$smtpFixturePassword='CI-SMTP-'.bin2hex(random_bytes(12));
+$mailSettingsPayload=[
+    'mail_driver'=>'log','mail_host'=>'smtp.example.test','mail_port'=>587,'mail_auth'=>1,
+    'mail_username'=>'ci-mailer@example.test','mail_password'=>$smtpFixturePassword,'mail_encryption'=>'tls',
+    'mail_from_address'=>'ci-mailer@example.test','mail_from_name'=>'CI Pharmacy Mailer','mail_timeout'=>20,
+];
+$admin->postWithCsrf('/admin/settings#email','/admin/settings',$mailSettingsPayload,'Settings and email delivery configuration updated');
+$encryptedMailPassword=$ciDb->query("SELECT value FROM settings WHERE key_name='mail_password_encrypted'")->fetchColumn();
+$mailPasswordMetadata=$ciDb->query("SELECT value_type,is_public FROM settings WHERE key_name='mail_password_encrypted'")->fetch();
+if(!is_string($encryptedMailPassword)||$encryptedMailPassword===''||hash_equals($smtpFixturePassword,$encryptedMailPassword)||base64_decode($encryptedMailPassword,true)===false||strlen((string)base64_decode($encryptedMailPassword,true))<29)throw new RuntimeException('SMTP password was not stored as an authenticated encrypted value.');
+if(!$mailPasswordMetadata||$mailPasswordMetadata['value_type']!=='encrypted'||(int)$mailPasswordMetadata['is_public']!==0)throw new RuntimeException('SMTP password setting was not marked encrypted and private.');
+$mailAudit=(string)$ciDb->query("SELECT CONCAT(COALESCE(old_values,''),COALESCE(new_values,'')) FROM audit_logs WHERE action='settings_updated' ORDER BY id DESC LIMIT 1")->fetchColumn();
+if(str_contains($mailAudit,$smtpFixturePassword)||str_contains($mailAudit,'"username"'))throw new RuntimeException('SMTP credential leaked into the settings audit payload.');
+$mailSettingsPage=$admin->request('GET','/admin/settings#email');
+if($mailSettingsPage['status']!==200||!str_contains($mailSettingsPage['body'],'A password is stored securely')||str_contains($mailSettingsPage['body'],$smtpFixturePassword))throw new RuntimeException('SMTP settings page exposed or failed to report the stored password safely.');
+$admin->postWithCsrf('/admin/settings#email','/admin/settings',array_merge($mailSettingsPayload,['mail_password'=>'']),'Settings and email delivery configuration updated');
+if((string)$ciDb->query("SELECT value FROM settings WHERE key_name='mail_password_encrypted'")->fetchColumn()!==$encryptedMailPassword)throw new RuntimeException('Blank SMTP password input did not preserve the encrypted credential.');
+$testTokenPage=$admin->request('GET','/admin/settings#email');
+if(!preg_match('/name="_token" value="([^"]+)"/',$testTokenPage['body'],$mailTokenMatch))throw new RuntimeException('SMTP settings CSRF token not found.');
+$rejectedSecret='CI-REJECTED-'.bin2hex(random_bytes(8));
+$rejectedTest=$admin->request('POST','/admin/settings/email/test',['_token'=>html_entity_decode($mailTokenMatch[1])]+array_merge($mailSettingsPayload,['mail_password'=>$rejectedSecret,'mail_test_recipient'=>'ci-admin@example.test']));
+if($rejectedTest['status']!==200||!str_contains($rejectedTest['body'],'Choose SMTP delivery before sending a test email')||str_contains($rejectedTest['body'],$rejectedSecret))throw new RuntimeException('SMTP test validation did not reject log mode without retaining the posted password.');
+echo "PASS encrypted SMTP settings, password preservation, safe audit/rendering, and guarded test delivery\n";
 $admin->get('/admin/applications?view=board','Application lifecycle board');
 $admin->get('/admin/applications?view=table','records on this page');
 $admin->get('/admin/applications/1','Decision readiness');
@@ -462,6 +486,7 @@ $reviewer->postExpectStatus('/admin/applications?view=board','/admin/application
 $reviewer->expectStatus('/admin/applications/1',403);
 $reviewer->expectStatus('/admin/applications/1/generated/application',403);
 $reviewer->expectStatus('/admin/admissions/create',403);
+$reviewer->postExpectStatus('/admin/applications?view=board','/admin/settings/email/test',['mail_driver'=>'smtp','mail_test_recipient'=>'reviewer@demo.test'],403);
 $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/1/publish',[],403);
 $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/'.$copyId.'/form-fields',['section_id'=>1,'field_key'=>'forbidden','label'=>'Forbidden','field_type'=>'text'],403);
 

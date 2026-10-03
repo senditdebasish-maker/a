@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Validator;
 use App\Services\AuditService;
 use App\Services\BackupService;
+use App\Services\MailConfigurationService;
 use App\Services\MailService;
 use Throwable;
 
@@ -111,7 +112,8 @@ final class SystemController extends Controller
     {
         $settings = [];
         foreach (Database::get()->all('SELECT * FROM settings ORDER BY group_name, key_name') as $row) $settings[$row['key_name']] = $row;
-        $this->view('admin/settings', compact('settings') + ['title' => 'College & admission settings'], 'admin');
+        $mailSettings = (new MailConfigurationService())->forDisplay();
+        $this->view('admin/settings', compact('settings', 'mailSettings') + ['title' => 'College, email & admission settings'], 'admin');
     }
 
     public function updateSettings(): never
@@ -125,6 +127,20 @@ final class SystemController extends Controller
             Flash::set('warning', 'Confirm the Aadhaar compliance acknowledgement before enabling collection.');
             $this->redirect('admin/settings#admission');
         }
+
+        $mailConfiguration = new MailConfigurationService();
+        $mailBefore = $mailConfiguration->current();
+        $mailUpdate = null;
+        if (array_key_exists('mail_driver', $_POST)) {
+            $mailUpdate = $mailConfiguration->validate($_POST);
+            if ($mailUpdate['errors'] !== []) $this->rejectMailSettings($mailUpdate['errors']);
+            try {
+                $mailConfiguration->save($mailUpdate['config'], $mailUpdate['new_password'], $mailUpdate['clear_password']);
+            } catch (Throwable) {
+                $this->rejectMailSettings(['mail_password' => ['The email settings could not be secured. Confirm that APP_KEY is valid and try again.']]);
+            }
+        }
+
         $db = Database::get();
         foreach ($allowed as $key) {
             if (!array_key_exists($key, $_POST)) continue;
@@ -133,9 +149,60 @@ final class SystemController extends Controller
             if ($existing) $db->update('settings', ['value' => $value, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $existing['id']]);
             else $db->insert('settings', ['group_name' => 'college', 'key_name' => $key, 'value' => $value, 'is_public' => 0, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
         }
-        AuditService::log('settings_updated', 'settings', null, [], ['aadhaar_stage' => $_POST['aadhaar_collection_stage'] ?? null, 'aadhaar_compliance_acknowledged' => isset($_POST['aadhaar_compliance_ack'])]);
-        Flash::set('success', 'Settings updated.');
-        $this->redirect('admin/settings');
+        $auditAfter = ['aadhaar_stage' => $_POST['aadhaar_collection_stage'] ?? null, 'aadhaar_compliance_acknowledged' => isset($_POST['aadhaar_compliance_ack'])];
+        if ($mailUpdate !== null) {
+            $auditAfter['mail'] = $mailConfiguration->auditSummary($mailUpdate['config']);
+            $auditAfter['mail_password_changed'] = $mailUpdate['new_password'] !== null || $mailUpdate['clear_password'];
+        }
+        AuditService::log('settings_updated', 'settings', null, $mailUpdate === null ? [] : ['mail' => $mailConfiguration->auditSummary($mailBefore)], $auditAfter);
+        Flash::set('success', $mailUpdate === null ? 'Settings updated.' : 'Settings and email delivery configuration updated.');
+        $this->redirect('admin/settings' . ($mailUpdate === null ? '' : '#email'));
+    }
+
+    public function testMailSettings(): never
+    {
+        $mailConfiguration = new MailConfigurationService();
+        $before = $mailConfiguration->current();
+        $validated = $mailConfiguration->validate($_POST);
+        $recipient = mb_strtolower(trim((string) ($_POST['mail_test_recipient'] ?? '')));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || mb_strlen($recipient) > 190 || preg_match('/[\r\n]/', $recipient)) {
+            $validated['errors']['mail_test_recipient'][] = 'Enter a valid recipient for the test email.';
+        }
+        if (($validated['config']['driver'] ?? '') !== 'smtp') {
+            $validated['errors']['mail_driver'][] = 'Choose SMTP delivery before sending a test email.';
+        }
+        if ($validated['errors'] !== []) $this->rejectMailSettings($validated['errors']);
+
+        try {
+            $mailConfiguration->save($validated['config'], $validated['new_password'], $validated['clear_password']);
+        } catch (Throwable) {
+            $this->rejectMailSettings(['mail_password' => ['The email settings could not be secured. Confirm that APP_KEY is valid and try again.']]);
+        }
+        $sent = (new MailService())->send(
+            $recipient,
+            'SMTP test — Netaji College of Pharmacy',
+            '<p>This test confirms that the authenticated SMTP settings saved in the administration portal can deliver email.</p><p>Sent at ' . e(date('d-m-Y H:i:s T')) . '.</p>',
+            'smtp_test'
+        );
+        AuditService::log('smtp_settings_tested', 'settings', null, ['mail' => $mailConfiguration->auditSummary($before)], [
+            'mail' => $mailConfiguration->auditSummary($validated['config']),
+            'mail_password_changed' => $validated['new_password'] !== null || $validated['clear_password'],
+            'test_recipient' => $recipient,
+            'delivery_succeeded' => $sent,
+        ]);
+        if ($sent) Flash::set('success', 'SMTP settings saved and a test email was sent to ' . $recipient . '.');
+        else Flash::set('warning', 'SMTP settings were saved, but the test email failed. Review the Email delivery log for the safe error message.');
+        $this->redirect('admin/settings#email');
+    }
+
+    private function rejectMailSettings(array $errors): never
+    {
+        $safeInput = $_POST;
+        unset($safeInput['_token'], $safeInput['mail_password']);
+        Flash::withErrors($errors);
+        Flash::withInput($safeInput);
+        Flash::set('warning', 'Review the email delivery settings. The SMTP password was not retained in the form.');
+        $this->redirect('admin/settings#email');
     }
 
     public function enquiries(): void

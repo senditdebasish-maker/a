@@ -153,7 +153,20 @@ foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.pub
 foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder','data-open-editor','student-form-preview'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission setup is missing plain-language editor hook {$contract}.");
 }
+$settingsView = file_get_contents($root . '/resources/views/admin/settings.php') ?: '';
+foreach (['id="email"','data-mail-settings','data-mail-driver','mail_password','data-mail-test','admin/settings/email/test'] as $contract) {
+    if (!str_contains($settingsView, $contract)) $fail("Admin settings is missing secure SMTP setup contract {$contract}.");
+}
+foreach (['.mail-settings-section','.mail-setup-hero','.mail-fieldset','.mail-test-panel','.mail-security-grid'] as $contract) {
+    if (!str_contains($polish, $contract)) $fail("ui-polish.css: secure SMTP setup rule is missing {$contract}.");
+}
+foreach (['app/Services/MailConfigurationService.php','config/mail.php'] as $mailFile) {
+    if (!is_file($root . '/' . $mailFile)) $fail("Mail configuration file is missing: {$mailFile}");
+}
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
+foreach (['[data-mail-settings]','[data-mail-driver]','[data-mail-password]','[data-mail-test]'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: SMTP settings contract is missing {$contract}.");
+}
 foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes','admissionOptionHelp','[data-open-editor]','[data-wizard-save-state]',"addEventListener('beforeunload'", "setAttribute('aria-current', 'step')"] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: guided admission editor contract is missing {$contract}.");
 }

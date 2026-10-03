@@ -24,7 +24,7 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Set `APP_DEBUG=false`, a unique `APP_KEY`, `APP_ENV=production`, exact HTTPS `APP_URL`, and `SESSION_SECURE=true`.
 - [ ] Use HTTPS with automatic certificate renewal and HSTS at the proxy/web-server layer.
 - [ ] Restrict database and filesystem permissions; never expose `.env`, `storage/`, logs, or backups.
-- [ ] Configure authenticated SMTP; enable staff MFA only after testing OTP delivery and recovery.
+- [ ] Configure authenticated SMTP in Admin Settings (or the `.env` fallback), use **Save & send test email**, then enable staff MFA only after testing OTP delivery and recovery.
 - [ ] Configure PHP upload/body limits consistently with the application limit.
 - [ ] Add malware scanning for uploads if required by the institution’s risk assessment.
 

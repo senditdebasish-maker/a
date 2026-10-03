@@ -372,7 +372,7 @@ The decisive identity rule is: **one person keeps one user account from applican
 
 - Controlled by `REQUIRE_STAFF_MFA`.
 - Fresh installations default to `false` to prevent locking out the first administrator before SMTP is configured.
-- MFA can run only with `MAIL_DRIVER=smtp`.
+- MFA can run only when the effective mail configuration uses SMTP. Admin Settings overrides the `.env` fallback after it is saved.
 - Codes are six digits, stored as password hashes, expire after ten minutes and allow five attempts.
 - Resend has a one-minute cooldown and invalidates prior active codes.
 - Failed delivery invalidates the challenge and returns safely to login.
@@ -582,8 +582,12 @@ Release 1 stores retention settings and consent/audit evidence. It does not yet 
 
 `MailService` supports:
 
-- `MAIL_DRIVER=log` — records the message in `mail_logs` without external delivery;
+- `MAIL_DRIVER=log` — records non-sensitive messages in `mail_logs` without external delivery;
 - `MAIL_DRIVER=smtp` — sends synchronously through PHPMailer and records success/failure.
+
+Super administrators with `settings.edit` can configure the effective delivery method under **Admin Settings → Email & SMTP**. The editor supports host, port, STARTTLS/implicit TLS, optional SMTP authentication, username, encrypted password, sender identity and connection timeout. Saving creates private `settings` rows that override the `.env` fallback. The SMTP password is encrypted with AES-256-GCM through `App\Core\Encryption`; it is never rendered back to the browser, copied into old-input flash data, or included in audit events. Leaving the password field empty preserves the existing secret, and explicit removal remains server validated.
+
+**Save & send test email** persists the validated settings and exercises the same `MailService` route used by the application. Success or a safely redacted failure appears in the email delivery log. The test endpoint is authenticated, permission checked, CSRF protected and will not run while Local log mode is selected. TLS certificate verification cannot be disabled from the UI.
 
 Used for:
 
@@ -592,7 +596,7 @@ Used for:
 - staff MFA;
 - enquiry replies and workflow communication where configured.
 
-For Gmail, use a Google App Password or an approved Workspace relay. Never commit SMTP credentials.
+For Gmail, use a Google App Password or an approved Workspace relay. Never commit SMTP credentials. Environment values remain useful for automated deployment, but the production preflight evaluates the effective database-over-environment configuration.
 
 Database notifications are separate from email and appear in the applicant portal.
 
@@ -830,11 +834,13 @@ SESSION_SECURE=false
 MAIL_DRIVER=log
 MAIL_HOST=
 MAIL_PORT=587
+MAIL_AUTH=true
 MAIL_USERNAME=
 MAIL_PASSWORD=
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=admissions@example.edu.in
 MAIL_FROM_NAME="Netaji College of Pharmacy"
+MAIL_TIMEOUT=20
 REQUIRE_STAFF_MFA=false
 ```
 

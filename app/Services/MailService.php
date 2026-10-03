@@ -14,25 +14,37 @@ final class MailService
 
     public function send(string $to, string $subject, string $html, ?string $template = null): bool
     {
-        $config = config('mail');
-        $driver = (string) ($config['driver'] ?? 'log');
+        $config = [];
+        $driver = 'log';
         $sensitive = in_array((string) $template, self::SENSITIVE_TEMPLATES, true);
-        $status = $driver === 'log' ? ($sensitive ? 'suppressed' : 'logged') : 'queued';
+        $status = $sensitive ? 'suppressed' : 'logged';
         $error = null;
         try {
+            $configuration = new MailConfigurationService();
+            $config = $configuration->current();
+            $driver = (string) ($config['driver'] ?? 'log');
+            $status = $driver === 'log' ? ($sensitive ? 'suppressed' : 'logged') : 'queued';
             if ($driver === 'smtp') {
+                if (!$configuration->isComplete($config)) {
+                    throw new \RuntimeException('SMTP configuration is incomplete. Review Admin → Settings → Email & SMTP.');
+                }
                 if (!class_exists(PHPMailer::class)) {
                     throw new \RuntimeException('PHPMailer is unavailable. Run composer install.');
                 }
                 $mail = new PHPMailer(true);
+                $mail->CharSet = 'UTF-8';
                 $mail->isSMTP();
-                $mail->Host = $config['host'];
-                $mail->Port = $config['port'];
-                $mail->SMTPAuth = true;
-                $mail->Username = $config['username'];
-                $mail->Password = $config['password'];
-                $mail->SMTPSecure = $config['encryption'];
-                $mail->setFrom($config['from_address'], $config['from_name']);
+                $mail->Host = (string) $config['host'];
+                $mail->Port = (int) $config['port'];
+                $mail->Timeout = (int) $config['timeout'];
+                $mail->SMTPAuth = (bool) $config['auth'];
+                if ($mail->SMTPAuth) {
+                    $mail->Username = (string) $config['username'];
+                    $mail->Password = (string) $config['password'];
+                }
+                $mail->SMTPSecure = (string) $config['encryption'];
+                $mail->SMTPAutoTLS = $config['encryption'] !== '';
+                $mail->setFrom((string) $config['from_address'], (string) $config['from_name']);
                 $mail->addAddress($to);
                 $mail->isHTML(true);
                 $mail->Subject = $subject;
@@ -43,11 +55,20 @@ final class MailService
             }
         } catch (Throwable $exception) {
             $status = 'failed';
-            $error = mb_substr($exception->getMessage(), 0, 2000);
+            $error = $this->safeError($exception->getMessage(), $config);
         }
 
         $this->logDelivery($to, $subject, $html, $template, $sensitive, $status, $error);
         return $status === 'sent' || $status === 'logged';
+    }
+
+    private function safeError(string $message, array $config): string
+    {
+        foreach (['password', 'username'] as $key) {
+            $secret = (string) ($config[$key] ?? '');
+            if ($secret !== '') $message = str_replace($secret, '[redacted]', $message);
+        }
+        return mb_substr($message, 0, 2000);
     }
 
     private function logDelivery(string $to, string $subject, string $html, ?string $template, bool $sensitive, string $status, ?string $error): void

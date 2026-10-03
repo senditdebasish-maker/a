@@ -54,6 +54,61 @@
     });
   });
 
+  // Settings: explain the selected delivery mode and keep SMTP credentials private.
+  all('[data-mail-settings]').forEach((settings) => {
+    const driver = one('[data-mail-driver]', settings);
+    const auth = one('[data-mail-auth]', settings);
+    const password = one('[data-mail-password]', settings);
+    const clearPassword = one('[data-mail-clear-password]', settings);
+    const passwordToggle = one('[data-mail-password-toggle]', settings);
+    const modeBadge = one('[data-mail-mode-badge]', settings);
+    const modeCopy = one('[data-mail-mode-copy]', settings);
+    const testButton = one('[data-mail-test]', settings);
+    if (!driver) return;
+
+    const syncMailSettings = () => {
+      const smtp = driver.value === 'smtp';
+      const authenticated = Boolean(auth?.checked);
+      const clearing = Boolean(clearPassword?.checked);
+      settings.classList.toggle('is-mail-log-mode', !smtp);
+      all('[data-smtp-required]', settings).forEach((field) => { field.required = smtp; });
+      all('[data-smtp-auth-required]', settings).forEach((field) => { field.required = smtp && authenticated; });
+      if (password) {
+        password.disabled = clearing;
+        password.required = smtp && authenticated && password.dataset.passwordConfigured !== '1' && !clearing;
+        if (clearing) password.value = '';
+      }
+      if (passwordToggle) passwordToggle.disabled = clearing;
+      if (testButton) {
+        testButton.disabled = !smtp;
+        testButton.title = smtp ? 'Save these settings and send a real test email.' : 'Select SMTP delivery to send a test email.';
+      }
+      if (modeBadge) {
+        modeBadge.classList.toggle('is-live', smtp);
+        modeBadge.classList.toggle('is-log', !smtp);
+        modeBadge.textContent = smtp ? 'SMTP enabled' : 'Local log mode';
+      }
+      const modeTitle = modeCopy?.querySelector('b');
+      const modeDescription = modeCopy?.querySelector('span');
+      if (modeTitle) modeTitle.textContent = smtp ? 'Live delivery selected' : 'Development safety mode';
+      if (modeDescription) modeDescription.textContent = smtp
+        ? 'Messages will be delivered through the server below after validation.'
+        : 'Non-sensitive messages are logged; OTPs and account links are suppressed.';
+    };
+
+    passwordToggle?.addEventListener('click', () => {
+      if (!password) return;
+      const visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      passwordToggle.textContent = visible ? 'Show' : 'Hide';
+      passwordToggle.setAttribute('aria-pressed', String(!visible));
+    });
+    driver.addEventListener('change', syncMailSettings);
+    auth?.addEventListener('change', syncMailSettings);
+    clearPassword?.addEventListener('change', syncMailSettings);
+    syncMailSettings();
+  });
+
   all('[data-confirm]').forEach((element) => {
     element.addEventListener('click', (event) => {
       if (!window.confirm(element.dataset.confirm)) event.preventDefault();

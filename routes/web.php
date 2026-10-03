@@ -146,6 +146,7 @@ $router->get('/admin/roles', [SystemController::class, 'roles'], ['auth', 'permi
 $router->post('/admin/roles/{id}', [SystemController::class, 'updateRole'], ['auth', 'permission:roles.manage']);
 $router->get('/admin/settings', [SystemController::class, 'settings'], ['auth', 'permission:settings.view']);
 $router->post('/admin/settings', [SystemController::class, 'updateSettings'], ['auth', 'permission:settings.edit']);
+$router->post('/admin/settings/email/test', [SystemController::class, 'testMailSettings'], ['auth', 'permission:settings.edit']);
 $router->get('/admin/audit', [SystemController::class, 'audit'], ['auth', 'permission:audit.view']);
 $router->get('/admin/mail-log', [SystemController::class, 'mailLog'], ['auth', 'permission:settings.view']);
 $router->get('/admin/backups', [SystemController::class, 'backups'], ['auth', 'permission:backups.manage']);

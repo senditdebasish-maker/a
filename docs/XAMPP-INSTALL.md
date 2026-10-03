@@ -50,10 +50,13 @@ Add `127.0.0.1 pharmacy.local` to the Windows hosts file, restart Apache, and up
 
 The installer uses `MAIL_DRIVER=log` and `REQUIRE_STAFF_MFA=false` to prevent a local setup lockout. Verification messages are written to **Admin → Email log**. Before production:
 
-1. Configure authenticated SMTP in `.env`.
-2. Test verification, password reset and staff OTP delivery.
-3. Change `REQUIRE_STAFF_MFA=true` only after delivery succeeds.
-4. Use HTTPS and change `SESSION_SECURE=true`.
+1. Sign in as a super administrator and open **Settings → Email & SMTP**.
+2. Enter the provider details and use **Save & send test email**. The SMTP password is encrypted and is never displayed again.
+3. Test verification, password reset and staff OTP delivery.
+4. Change `REQUIRE_STAFF_MFA=true` only after delivery succeeds.
+5. Use HTTPS and change `SESSION_SECURE=true`.
+
+You may instead configure the `.env` values shown below for deployment automation. Saved Admin Settings take precedence over those fallback values.
 
 ### Gmail SMTP example
 
@@ -63,11 +66,13 @@ Google normally requires 2-Step Verification and an **App Password**. Do not use
 MAIL_DRIVER=smtp
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
+MAIL_AUTH=true
 MAIL_USERNAME=your-official-address@gmail.com
 MAIL_PASSWORD=your-16-character-google-app-password
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=your-official-address@gmail.com
 MAIL_FROM_NAME="Netaji College of Pharmacy"
+MAIL_TIMEOUT=20
 ```
 
 Keep `MAIL_FROM_ADDRESS` the same as the authenticated Gmail account unless Google Workspace has authorised another sender. Restart Apache after editing `.env`, request a new message, check Spam, and review **Admin → Email log** for `sent` or `failed` plus the provider error. Google Workspace administrators may need to permit App Passwords or provide the institution's approved SMTP relay.
