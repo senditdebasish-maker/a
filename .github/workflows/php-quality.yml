@@ -25,7 +25,18 @@ jobs:
       - run: composer validate --strict
       - run: composer install --no-interaction --no-progress --prefer-dist
       - name: Lint PHP files
-        run: find app config database public resources routes scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+        shell: bash
+        run: |
+          failed=0
+          while IFS= read -r -d '' file; do
+            if ! output=$(php -l "$file" 2>&1); then
+              echo "$output"
+              message=$(printf '%s' "$output" | tr '\n' ' ')
+              echo "::error file=$file::$message"
+              failed=1
+            fi
+          done < <(find app config database public resources routes scripts -name '*.php' -print0)
+          exit "$failed"
       - name: Audit CSS assets and layout references
         run: php scripts/ci-css-audit.php
 
@@ -123,7 +134,15 @@ jobs:
           php scripts/admissions-preflight.php
           sed -i 's/DB_DATABASE=ncp_upgrade/DB_DATABASE=ncp_test/' .env
       - name: Exercise admission workflow invariants
-        run: php scripts/ci-admission-workflow.php
+        shell: bash
+        run: |
+          if ! workflow_output=$(php scripts/ci-admission-workflow.php 2>&1); then
+            printf '%s\n' "$workflow_output"
+            diagnostic=$(printf '%s' "$workflow_output" | tail -c 2000 | tr '\n' ' ')
+            echo "::error title=Admission workflow failure::$diagnostic"
+            exit 1
+          fi
+          printf '%s\n' "$workflow_output"
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private
