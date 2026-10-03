@@ -1069,16 +1069,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current validated Release 1 baseline, including the graphical admin workflow, rejected-application attempts, stepwise Save & next form and automatic revisioned uploads, is:
+The current validated Release 1 baseline, including the polished admission-cycle workspace, graphical application workflow, rejected-application attempts, stepwise Save & next form, automatic revisioned uploads and encrypted admin SMTP setup, is:
 
 ```text
-e162c64 Use published configuration for seeded admissions
+778c66a Add secure SMTP setup to admin settings
 ```
 
-The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, reapplication ownership/open-cycle/lineage/reset checks, section progression, automatic upload revision history, and graphical-workflow RBAC/batch coverage:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, encrypted SMTP settings and secret-exclusion checks, reapplication ownership/open-cycle/lineage/reset checks, section progression, automatic upload revision history, and graphical-workflow RBAC/batch coverage:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/37051086121
+https://github.com/senditdebasish-maker/a/actions/runs/37144194979
 ```
 
 Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.

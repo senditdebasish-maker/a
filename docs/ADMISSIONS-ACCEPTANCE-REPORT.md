@@ -195,7 +195,7 @@ GitHub Actions runs:
 11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
 12. Admin SMTP settings rendering, encrypted private password storage, blank-password preservation, audit/HTML secret exclusion and test-route delivery-mode validation.
 
-Authoritative green run: `37051086121` at commit `e162c64`.
+Authoritative green run: `37144194979` at commit `778c66a`.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers and the institution's exact reservation/eligibility policy.
 
