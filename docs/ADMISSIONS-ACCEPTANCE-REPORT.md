@@ -193,7 +193,7 @@ No production database or deployment credentials were available in the developme
 | One active gateway plus manual fallback | **PASS** | `PaymentGatewayService`; Admin Settings gateway cards; `resources/views/student/payments.php`; encrypted write-only secrets. |
 | Real Razorpay/Cashfree/PayU provider reconciliation | **NOT TESTED** | No institution credentials or externally reachable registered webhook were available. Deployment procedure is in `docs/MERIT-SELECTION-PAYMENTS.md`. |
 | Email + portal milestones | **PASS** | `AdmissionNotificationService`; workflow/application/payment integrations; `scripts/process-admission-notifications.php`. Real SMTP remains environment acceptance. |
-| 2,000+ live-data performance/load target | **NOT TESTED** | Server-side generation, indexed lists, 100-row pagination and 200-row selection batches are implemented, but no 2,000-record timed load environment was available. |
+| 2,000+ merit generation target | **PASS** | `scripts/ci-merit-scale.php` generates and validates a 2,005-application frozen run under a 60-second CI budget on both database engines; UI uses 100-row pagination and 200-row selection batches. Full production concurrency/load testing remains deployment acceptance. |
 
 ## 8. Automated validation
 
@@ -213,7 +213,7 @@ GitHub Actions runs:
 12. Admin SMTP settings rendering, encrypted private password storage, blank-password preservation, audit/HTML secret exclusion and test-route delivery-mode validation.
 13. Strict merit verification, versioned formula/rank snapshots, deterministic open/reserved ranking, merit-only capacity-checked selection, deadline offers, milestone outbox and signed PayU settlement checks; route/schema audits also cover Razorpay/Cashfree adapters and webhook endpoints.
 
-Authoritative green run: `37144194979` at commit `778c66a`.
+Authoritative green run: `37147831340` at commit `3512d3f`.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers, 2,000+ production-like merit load, the institution's exact reservation/eligibility policy and provider-owned sandbox/live gateway reconciliation.
 

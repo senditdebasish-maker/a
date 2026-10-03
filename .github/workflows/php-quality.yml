@@ -143,6 +143,16 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$workflow_output"
+      - name: Exercise 2,005-application merit scale
+        shell: bash
+        run: |
+          if ! scale_output=$(php scripts/ci-merit-scale.php 2>&1); then
+            printf '%s\n' "$scale_output"
+            diagnostic=$(printf '%s' "$scale_output" | tail -c 2000 | tr '\n' ' ')
+            echo "::error title=Merit scale failure::$diagnostic"
+            exit 1
+          fi
+          printf '%s\n' "$scale_output"
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private

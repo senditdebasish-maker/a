@@ -1079,16 +1079,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current validated Release 1 baseline, including the polished admission-cycle workspace, graphical application workflow, rejected-application attempts, stepwise Save & next form, automatic revisioned uploads and encrypted admin SMTP setup, is:
+The current validated Release 1 baseline includes the polished admission-cycle and application workspaces, rejected-application attempts, automatic revisioned uploads, encrypted SMTP settings, strict Verified gate, frozen programme merit generations, public/private results, ranked selection offers, gateway/manual payments and milestone notification outbox:
 
 ```text
-778c66a Add secure SMTP setup to admin settings
+3512d3f Restore payment received milestone dispatch
 ```
 
-The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, encrypted SMTP settings and secret-exclusion checks, reapplication ownership/open-cycle/lineage/reset checks, section progression, automatic upload revision history, and graphical-workflow RBAC/batch coverage:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, migration 006, RBAC/routes, strict merit gate, versioned deterministic ranking, capacity-checked selection, encrypted gateway configuration and signed PayU settlement regression coverage. Real provider sandbox reconciliation and a 2,000-record timed load test remain deployment acceptance items:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/37144194979
+https://github.com/senditdebasish-maker/a/actions/runs/37147831340
 ```
 
 Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.
