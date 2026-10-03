@@ -24,7 +24,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - English/Bengali/Hindi interface dictionary foundation and CMS translation records with English fallback.
 - Email-verification registration, password recovery, login throttling and optional staff email OTP.
 - Dedicated database-driven Admissions workspace for cycle lifecycle, publication readiness, programme catalogue/assignment, seat matrices, eligibility, dynamic forms, documents, fees, preview, versioning and safe duplication.
-- One application per cycle with multiple-cycle history and ranked programme choices.
+- One active application attempt per cycle, with a data-preserving new attempt after rejection, complete attempt history and ranked programme choices.
 - Personal, address, guardian, Class 10/12, entrance exam, programme preference, declaration and secure document workflows.
 - Draft, submission, assignment, review, correction, decision, fee verification and admission state history.
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.

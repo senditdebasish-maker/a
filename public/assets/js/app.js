@@ -175,6 +175,55 @@
     syncFromLocation();
   });
 
+  // Applicant documents save immediately after a file is selected; the normal submit remains as a no-JavaScript fallback.
+  all('[data-auto-upload]').forEach((form) => {
+    const input = one('[data-auto-upload-input]', form);
+    const message = one('[data-auto-upload-message]', form);
+    const pickerLabel = one('[data-file-picker-label]', form);
+    if (!input || !window.fetch || !window.FormData) return;
+    form.classList.add('auto-upload-ready');
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const payload = new FormData(form);
+      input.disabled = true;
+      form.classList.add('is-uploading');
+      const documentSection = form.closest('#documents');
+      const continueButton = documentSection?.querySelector('[data-document-continue]');
+      if (continueButton) continueButton.disabled = true;
+      if (message) { message.textContent = `Saving ${file.name}…`; message.className = 'auto-upload-message is-saving'; }
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST', body: payload, credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+        });
+        const contentType = response.headers.get('content-type') || '';
+        const result = contentType.includes('application/json') ? await response.json() : { ok: false, message: 'The upload session changed. Refresh the page and try again.' };
+        if (!response.ok || !result.ok) throw new Error(result.message || 'The file could not be saved.');
+        if (message) { message.textContent = result.message; message.className = 'auto-upload-message is-saved'; }
+        if (pickerLabel) pickerLabel.textContent = 'Replace file';
+        const copy = form.closest('article')?.querySelector('[data-upload-copy]');
+        if (copy && result.document) {
+          let state = one('[data-upload-state]', copy);
+          if (!state) { state = document.createElement('span'); state.dataset.uploadState = ''; copy.append(state); }
+          state.className = 'upload-status status-pending';
+          state.textContent = `Pending · ${result.document.original_name}`;
+          let view = one('[data-upload-view]', copy);
+          if (!view) { view = document.createElement('a'); view.dataset.uploadView = ''; view.target = '_blank'; copy.append(view); }
+          view.href = result.view_url;
+          view.textContent = 'View saved file';
+        }
+      } catch (error) {
+        if (message) { message.textContent = error instanceof Error ? error.message : 'The file could not be saved.'; message.className = 'auto-upload-message is-error'; }
+      } finally {
+        input.disabled = false;
+        input.value = '';
+        form.classList.remove('is-uploading');
+        if (continueButton && !documentSection?.querySelector('.auto-upload.is-uploading')) continueButton.disabled = false;
+      }
+    });
+  });
+
   // Application pipeline: batch selection, validated move proposals, and accessible confirmations.
   const bulkWorkflow = one('[data-bulk-workflow]');
   if (bulkWorkflow) {

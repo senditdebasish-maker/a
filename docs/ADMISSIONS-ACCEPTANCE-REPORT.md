@@ -2,7 +2,7 @@
 
 **Institution:** Netaji College of Pharmacy  
 **Release branch:** `arena/01a0f38a-a`  
-**Release date:** 2 October 2026
+**Release date:** 3 October 2026
 **Architecture:** custom PHP 8.1+ / MySQL 8 / Apache (XAMPP compatible); no Node.js runtime
 
 ## 1. Delivery status
@@ -37,6 +37,7 @@ Cycle state and application state are separate. Public availability is calculate
 - `AdmissionFeeService` — category/rule-based immutable assessments.
 - `ApplicationNumberService` — transactional per-cycle/programme numbering.
 - `ApplicationSnapshotService` — configuration-linked submission evidence and immutable revisions.
+- `ReapplicationService` — open-cycle, latest-rejected-attempt validation and transactional copying into a separately linked draft without mutating source evidence.
 - `UploadService` — private randomized storage, allowlisted MIME inspection, size checks, PDF/image validation and SHA-256 hashes.
 
 ### Views and assets
@@ -50,7 +51,7 @@ Cycle state and application state are separate. Public availability is calculate
 
 ## 3. Schema
 
-A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder without changing admission records.
+A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder; migration 005 replaces the one-row-per-user/cycle constraint with non-destructive numbered attempts and self-lineage. No migration deletes admission records.
 
 Core admission additions are:
 
@@ -82,8 +83,11 @@ Existing tables receive additive nullable/defaulted columns and indexes only. Th
 - `GET /admissions/{slug}`
 - `GET /admissions/{slug}/prospectus`
 - `GET /admissions/{slug}/apply`
-- `GET|POST /student/application`
+- `GET /student/application`
+- `POST /student/application/save`
+- `POST /student/applications/{id}/reapply`
 - `POST /student/application/document`
+- `POST /student/application/documents/continue`
 - `POST /student/application/submit`
 - `POST /student/application/corrections/resubmit`
 - `GET|POST /student/payments`
@@ -138,7 +142,7 @@ The super-admin receives the full permission set. Admission officers manage oper
 - Publication captures a SHA-256 configuration version and freezes application-level editing.
 - Close/archive are explicit lifecycle transitions; date-derived `scheduled`, `live`, `closing_soon` and `closed` states are server-calculated.
 - Duplication copies configuration but never applications, payments, allocations or filled-seat counts.
-- Applicants start one application per cycle, retain multiple-cycle history and bind to the published configuration version.
+- Applicants start one active attempt per cycle. While the cycle remains open, a rejected latest attempt can create a separate linked draft that copies editable data and documents; every prior attempt remains unchanged and each submission binds to its published configuration version.
 - Programme choices are ranked and revalidated against the cycle on submission.
 - Dynamic custom fields support text, textarea, email, telephone, number, date, select, radio, checkbox and multiselect controls. Simple JSON `all`/`any` conditional rules are enforced in rendering and server validation.
 - File fields bind to protected document types rather than accepting arbitrary public uploads.
@@ -178,11 +182,14 @@ GitHub Actions runs:
 3. PHP syntax lint on PHP 8.1, 8.2 and 8.3.
 4. Clean MySQL/MariaDB schema import (65 tables).
 5. Production Seeder integrity checks.
-6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002 and 003.
+6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002–005, including attempt fields, replacement uniqueness and self-lineage.
 7. Admission lifecycle, targeted correction, eligibility and immutable snapshot revision workflow checks.
-8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes.
-9. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
-10. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes on MySQL 8.0 and MariaDB 10.4.
+9. Reapplication ownership, latest-attempt and open-cycle gates; source immutability; copied/reset data; configuration version; duplicate-attempt prevention; Save & next; and automatic replacement revision checks.
+10. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
+11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
+
+Authoritative green run: `37051086121` at commit `e162c64`.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers and the institution's exact reservation/eligibility policy.
 
@@ -214,6 +221,7 @@ MySQL DDL auto-commits. The preferred rollback is a forward fix while retaining 
 - `database/migrations/002_admission_management.rollback.md`
 - `database/migrations/003_submission_snapshot_revisions.rollback.md`
 - `database/migrations/004_cms_page_builder.rollback.md`
+- `database/migrations/005_application_reapply_attempts.rollback.md`
 
 Do not drop admission tables or delete application/snapshot records in production. If an upgrade fails, keep maintenance mode active, capture the error and schema state, restore only from the verified backup when a forward fix is not viable, and reconcile uploaded private files created after that backup.
 

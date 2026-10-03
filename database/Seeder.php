@@ -270,7 +270,7 @@ final class Seeder
             $snapshot[$key] = $key === 'cycle' ? $statement->fetch(PDO::FETCH_ASSOC) : $statement->fetchAll(PDO::FETCH_ASSOC);
         }
         $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        return $this->insert('admission_configuration_versions', ['admission_cycle_id'=>$cycleId,'version_no'=>1,'snapshot_json'=>$json,'snapshot_hash'=>hash('sha256',$json),'status'=>'seeded_baseline','created_by'=>$adminId,'created_at'=>$this->now]);
+        return $this->insert('admission_configuration_versions', ['admission_cycle_id'=>$cycleId,'version_no'=>1,'snapshot_json'=>$json,'snapshot_hash'=>hash('sha256',$json),'status'=>'published','created_by'=>$adminId,'created_at'=>$this->now]);
     }
 
     private function cms(int $adminId, int $departmentId): void

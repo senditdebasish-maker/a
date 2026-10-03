@@ -157,10 +157,17 @@ foreach (['application-lifecycle','guided-review-summary','aria-current="step"']
 foreach (['dragstart','dataset.dropStatus','showModal','requestSubmit','data-confirm-bulk'] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: graphical application workflow contract is missing {$contract}.");
 }
+foreach (['data-auto-upload','X-Requested-With','new FormData(form)','is-uploading'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: automatic document persistence contract is missing {$contract}.");
+}
+$applicantApplication = file_get_contents($root . '/resources/views/student/application.php') ?: '';
+foreach (['Save & next','data-auto-upload','reapply-prompt','continue_to'] as $contract) {
+    if (!str_contains($applicantApplication, $contract)) $fail("Applicant step form is missing {$contract}.");
+}
 foreach (['.application-board','.workflow-column','.workflow-card','.bulk-workflow-bar','.application-lifecycle','.guided-review-summary'] as $contract) {
     if (!str_contains($polish, $contract)) $fail("ui-polish.css: graphical workflow rule is missing {$contract}.");
 }
-foreach (['database/migrations/004_cms_page_builder.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
+foreach (['database/migrations/004_cms_page_builder.php','database/migrations/005_application_reapply_attempts.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
     if (!is_file($root . '/' . $builderFile)) $fail("CMS page builder file is missing: {$builderFile}");
 }
 
