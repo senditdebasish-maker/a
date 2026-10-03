@@ -32,6 +32,11 @@ final class AdmissionNotificationService
         $this->deliver($applicationId, $type, $title, $this->interpolate($message, $context), $sendNow);
     }
 
+    public function paymentReceived(int $applicationId, bool $sendNow = true): void
+    {
+        $this->status($applicationId, 'payment_pending', [], $sendNow);
+    }
+
     public function meritPublished(int $applicationId, string $summary): void
     {
         $this->deliver(
