@@ -114,7 +114,7 @@ $layouts = [
     'resources/views/layouts/public.php' => ['app.css', 'ui-polish.css'],
     'resources/views/layouts/auth.php' => ['app.css', 'ui-polish.css'],
     'resources/views/layouts/student.php' => ['app.css', 'ui-polish.css'],
-    'resources/views/layouts/admin.php' => ['app.css', 'ui-polish.css', 'admissions-admin.css'],
+    'resources/views/layouts/admin.php' => ['app.css', 'ui-polish.css', 'admissions-admin.css', 'admission-wizard.css'],
 ];
 foreach ($layouts as $layout => $requiredAssets) {
     $source = file_get_contents($root . '/' . $layout);
@@ -141,6 +141,14 @@ foreach ([
 ] as $workspaceView) {
     $source = file_get_contents($root . '/' . $workspaceView) ?: '';
     if (!str_contains($source, 'data-section-workspace') || !str_contains($source, 'data-section-tabs')) $fail("{$workspaceView}: sliding workspace hooks are missing.");
+}
+$admissionWizard = file_get_contents($root . '/resources/views/admin/admissions/show.php') ?: '';
+foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="fees"','id="form-builder"','id="documents"','id="review-publish"','Publish admission notice'] as $contract) {
+    if (!str_contains($admissionWizard, $contract)) $fail("Guided admission wizard is missing {$contract}.");
+}
+$wizardCss = file_get_contents($cssRoot . '/admission-wizard.css') ?: '';
+foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','@media(max-width:760px)'] as $contract) {
+    if (!str_contains($wizardCss, $contract)) $fail("admission-wizard.css: expected guided setup rule missing: {$contract}");
 }
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {

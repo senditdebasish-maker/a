@@ -187,6 +187,7 @@ if($archivedPublic['status']!==200||str_contains($archivedPublic['body'],'CI lea
 echo "PASS CMS page section create, translate, update, reorder, render and archive\n";
 $cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
 $cyclePath='/admin/admissions/'.$cycleId;
+$admin->get($cyclePath,'Complete the admission notice in seven focused steps');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
 $cycleProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$cycleId.' AND program_id=1')->fetchColumn();
 $programPath=$cyclePath.'/programs/'.$cycleProgramId;
@@ -218,7 +219,7 @@ $admin->postWithCsrf($cyclePath,$programPath.'/seats',['seat_capacity'=>12,'seat
 $feeId=(int)$ciDb->query("SELECT id FROM admission_fee_rules WHERE cycle_program_id={$cycleProgramId} AND fee_type='application_fee' ORDER BY id LIMIT 1")->fetchColumn();
 $admin->postWithCsrf($cyclePath,$programPath.'/fees',['fee_rule_id'=>$feeId,'fee_type'=>'application_fee','category_code'=>'','label'=>'Updated application fee','amount'=>600,'late_fee_amount'=>50,'refund_policy'=>'Non-refundable after submission.','status'=>'active'],'Fee rule saved');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/documents',['document_type_id'=>1,'program_id'=>'','category'=>'','stage'=>'application','sort_order'=>10,'is_required'=>1],'Document requirement saved');
-$admin->postWithCsrf($cyclePath,$cyclePath,['academic_session_id'=>1,'name'=>'CI Editable Cycle Updated','code'=>'CI-EDIT-28','slug'=>'ci-editable-cycle','starts_at'=>$liveStart,'ends_at'=>$liveEnd,'correction_deadline'=>$correctionEnd,'application_number_prefix'=>'CI-APP-28','max_program_preferences'=>3,'closing_soon_hours'=>72,'summary'=>'Updated cycle used by the full HTTP workflow.','instructions'=>'Complete all configured requirements.','declaration_text'=>'I confirm the submitted information is correct.'],'Admission cycle settings saved');
+$admin->postWithCsrf($cyclePath,$cyclePath,['academic_session_id'=>1,'name'=>'CI Editable Cycle Updated','code'=>'CI-EDIT-28','slug'=>'ci-editable-cycle','starts_at'=>$liveStart,'ends_at'=>$liveEnd,'correction_deadline'=>$correctionEnd,'application_number_prefix'=>'CI-APP-28','max_program_preferences'=>3,'closing_soon_hours'=>72,'summary'=>'Updated cycle used by the full HTTP workflow.','instructions'=>'Complete all configured requirements.','declaration_text'=>'I confirm the submitted information is correct.','continue_to'=>'programmes'],'Continue with programme setup.');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/publish',[],'Cycle published with immutable configuration version 1');
 $published=$ciDb->query('SELECT status,configuration_version FROM admission_cycles WHERE id='.$cycleId)->fetch();
 $version=$ciDb->query('SELECT * FROM admission_configuration_versions WHERE admission_cycle_id='.$cycleId.' ORDER BY version_no DESC LIMIT 1')->fetch();

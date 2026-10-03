@@ -432,6 +432,20 @@ Possible terminal/exception states: rejected, withdrawn
 - admission confirms the allocation and creates `student_enrollments` if one does not already exist;
 - the existing user account remains active.
 
+### Guided admission notice setup
+
+`GET /admin/admissions/{id}` is the primary seven-step publication wizard. It presents one panel at a time and preserves direct hashes and browser back/forward navigation:
+
+1. notice identity, public copy and application dates;
+2. programmes and intake defaults;
+3. category seats and eligibility rules;
+4. application/admission fee rules;
+5. applicant form sections and fields;
+6. application/admission document requirements;
+7. server-validated review, public preview and publication.
+
+Each step displays its own completion state. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
+
 ### Staff application workflow
 
 `GET /admin/applications` defaults to a nine-column responsive pipeline: Intake, Review, Corrections, Approved, Selected, Payment, Fee verified, Admitted and Closed. The same filters and reviewer scope apply to the alternative paginated table and CSV export.
