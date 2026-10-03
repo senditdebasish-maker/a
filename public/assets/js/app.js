@@ -175,6 +175,54 @@
     syncFromLocation();
   });
 
+  // Admission setup: show the seat arithmetic before the administrator submits it.
+  all('[data-seat-matrix]').forEach((form) => {
+    const capacity = one('[data-seat-capacity]', form);
+    const seatInputs = all('[data-seat-count]', form);
+    const balance = one('[data-seat-balance]', form);
+    if (!capacity || !balance || !seatInputs.length) return;
+    const updateSeatBalance = () => {
+      const approved = Math.max(0, Number.parseInt(capacity.value || '0', 10) || 0);
+      const assigned = seatInputs.reduce((total, input) => total + Math.max(0, Number.parseInt(input.value || '0', 10) || 0), 0);
+      const difference = approved - assigned;
+      balance.classList.remove('is-balanced', 'is-short', 'is-over');
+      if (difference === 0) {
+        balance.classList.add('is-balanced');
+        balance.querySelector('b').textContent = `Ready to save — ${assigned} of ${approved} seats assigned.`;
+      } else if (difference > 0) {
+        balance.classList.add('is-short');
+        balance.querySelector('b').textContent = `Assign ${difference} more seat${difference === 1 ? '' : 's'} before saving.`;
+      } else {
+        balance.classList.add('is-over');
+        balance.querySelector('b').textContent = `Remove ${Math.abs(difference)} seat${difference === -1 ? '' : 's'} before saving.`;
+      }
+    };
+    [capacity, ...seatInputs].forEach((input) => input.addEventListener('input', updateSeatBalance));
+    updateSeatBalance();
+  });
+
+  // Keep ordinary form customisation simple while preserving advanced keys and option formats.
+  all('[data-key-builder]').forEach((builder) => {
+    const source = one('[data-key-source]', builder);
+    const target = one('[data-key-target]', builder);
+    if (!source || !target) return;
+    let manuallyEdited = target.value.trim() !== '';
+    target.addEventListener('input', () => { manuallyEdited = target.value.trim() !== ''; });
+    source.addEventListener('input', () => {
+      if (manuallyEdited) return;
+      target.value = source.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    });
+  });
+  const optionFieldTypes = new Set(['select', 'radio', 'checkbox', 'multiselect']);
+  all('[data-field-builder]').forEach((builder) => {
+    const type = one('[data-field-type]', builder);
+    const options = one('[data-field-options]', builder);
+    if (!type || !options) return;
+    const syncOptions = () => { options.hidden = !optionFieldTypes.has(type.value); };
+    type.addEventListener('change', syncOptions);
+    syncOptions();
+  });
+
   // Applicant documents save immediately after a file is selected; the normal submit remains as a no-JavaScript fallback.
   all('[data-auto-upload]').forEach((form) => {
     const input = one('[data-auto-upload-input]', form);

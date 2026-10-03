@@ -186,9 +186,9 @@ final class AdmissionController extends Controller
             $db->transaction(function(Database $db) use($rows,$cp,$capacity): void {
                 $total=0; $updates=[];
                 foreach($rows as $seatId=>$value){ $seat=$db->fetch('SELECT * FROM seat_matrix WHERE id=:id AND cycle_program_id=:program FOR UPDATE',['id'=>(int)$seatId,'program'=>$cp['id']]); if(!$seat) throw new RuntimeException('Invalid seat matrix row.'); $value=(int)$value; if($value<(int)$seat['filled_seats']) throw new RuntimeException('Seats cannot be below active allocations.'); $total+=$value; $updates[]=[$seat,$value]; }
-                $newCategory=trim((string)($_POST['new_category']??'')); $newQuota=trim((string)($_POST['new_quota']??'state')); $newSeats=(int)($_POST['new_seats']??0);
+                $newCategory=trim((string)($_POST['new_category']??'')); $newQuota=trim((string)($_POST['new_quota']??'state'))?:'state'; $newSeats=(int)($_POST['new_seats']??0);
                 if($newCategory!==''&&$newSeats>0){ if(!(int)$db->scalar("SELECT COUNT(*) FROM admission_categories WHERE code=:code AND status='active'",['code'=>$newCategory])) throw new RuntimeException('Select a valid category for the new seat row.'); if($db->fetch('SELECT id FROM seat_matrix WHERE cycle_program_id=:program AND category=:category AND quota=:quota',['program'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota])) throw new RuntimeException('That category and quota row already exists.'); $total+=$newSeats; }
-                if($total!==$capacity) throw new RuntimeException('Category seat total must equal the programme capacity entered above.');
+                if($total!==$capacity) throw new RuntimeException('The seats divided between categories must equal the approved programme intake. Review the live total and try again.');
                 foreach($updates as [$seat,$value]) $db->update('seat_matrix',['seats'=>$value,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$seat['id']]);
                 if($newCategory!==''&&$newSeats>0) $db->insert('seat_matrix',['cycle_program_id'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota,'seats'=>$newSeats,'filled_seats'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
                 $db->update('cycle_programs',['seat_capacity'=>$capacity,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$cp['id']]);
@@ -224,7 +224,7 @@ final class AdmissionController extends Controller
     public function saveSection(string $id): never
     {
         try {
-            $cycle=$this->draftCycle((int)$id); $db=Database::get(); $key=$this->slug((string)($_POST['section_key']??''),'_'); $title=trim((string)($_POST['title']??'')); if($key===''||$title==='') throw new RuntimeException('Section key and title are required.');
+            $cycle=$this->draftCycle((int)$id); $db=Database::get(); $title=trim((string)($_POST['title']??'')); if($title==='') throw new RuntimeException('Section title is required.'); $keySource=trim((string)($_POST['section_key']??'')); $key=$this->slug($keySource!==''?$keySource:$title,'_'); if($key==='') throw new RuntimeException('Enter a section title that contains letters or numbers.');
             $sectionId=(int)($_POST['section_id']??0); $data=['admission_cycle_id'=>$cycle['id'],'section_key'=>$key,'title'=>$title,'description'=>trim((string)($_POST['description']??'')),'sort_order'=>(int)($_POST['sort_order']??0),'status'=>in_array(($_POST['status']??'active'),['active','inactive'],true)?($_POST['status']??'active'):'active','updated_at'=>date('Y-m-d H:i:s')];
             if($sectionId){ if(!(int)$db->scalar('SELECT COUNT(*) FROM admission_form_sections WHERE id=:id AND admission_cycle_id=:cycle',['id'=>$sectionId,'cycle'=>$cycle['id']])) throw new RuntimeException('Form section not found.'); $db->update('admission_form_sections',$data,'id=:id',['id'=>$sectionId]); } else $sectionId=$db->insert('admission_form_sections',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('admission_form_section_saved','admission_form_section',$sectionId,[],$data); Flash::set('success','Form section saved.');
@@ -242,7 +242,7 @@ final class AdmissionController extends Controller
         try {
             $cycle=$this->draftCycle((int)$id); $db=Database::get(); $sectionId=(int)($_POST['section_id']??0); if(!(int)$db->scalar('SELECT COUNT(*) FROM admission_form_sections WHERE id=:id AND admission_cycle_id=:cycle',['id'=>$sectionId,'cycle'=>$cycle['id']])) throw new RuntimeException('Select a valid form section.');
             $type=(string)($_POST['field_type']??'text'); $types=['text','textarea','email','tel','number','date','select','radio','checkbox','multiselect','file']; if(!in_array($type,$types,true)) throw new RuntimeException('Invalid field type.');
-            $key=$this->slug((string)($_POST['field_key']??''),'_'); $label=trim((string)($_POST['label']??'')); if($key===''||$label==='') throw new RuntimeException('Field key and label are required.');
+            $label=trim((string)($_POST['label']??'')); if($label==='') throw new RuntimeException('Question label is required.'); $keySource=trim((string)($_POST['field_key']??'')); $key=$this->slug($keySource!==''?$keySource:$label,'_'); if($key==='') throw new RuntimeException('Enter a question label that contains letters or numbers.');
             $binding=trim((string)($_POST['canonical_binding']??''))?:null;
             if($type==='file'&&(!$binding||!str_starts_with($binding,'document:')||!(int)$db->scalar("SELECT COUNT(*) FROM document_types WHERE code=:code AND status='active'",['code'=>substr($binding,9)]))) throw new RuntimeException('File fields must bind to an active document type as document:code.');
             $conditional=trim((string)($_POST['conditional_rules']??''))?:null; if($conditional!==null&&json_decode($conditional,true)===null) throw new RuntimeException('Conditional rules must be valid JSON.');

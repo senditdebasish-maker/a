@@ -446,6 +446,13 @@ Possible terminal/exception states: rejected, withdrawn
 
 Each step displays its own completion state. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
 
+The configuration editors deliberately translate internal structures into staff-facing language:
+
+- the seat editor explains category versus seat pool, displays the `programme intake = distributed seats` equation and calculates any shortage or excess in the browser while retaining server-side validation;
+- eligibility is presented as `applicant information + condition + required value`, while rule type, evaluation order and raw custom keys remain available under advanced settings;
+- the application-form designer separates sections from questions, groups questions by section, provides an active form map and hides stable keys, bindings and JSON conditions under advanced settings;
+- new section and question keys may be omitted by ordinary administrators and are then derived server-side from the title or label. Existing keys should remain stable once applications depend on them.
+
 ### Staff application workflow
 
 `GET /admin/applications` defaults to a nine-column responsive pipeline: Intake, Review, Corrections, Approved, Selected, Payment, Fee verified, Admitted and Closed. The same filters and reviewer scope apply to the alternative paginated table and CSV export.
