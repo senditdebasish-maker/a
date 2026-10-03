@@ -43,7 +43,7 @@ final class PaymentGatewayService
     public function createCheckout(int $applicationId,int $userId):array
     {
         $db=Database::get();
-        $application=$db->fetch('SELECT a.*,CONCAT(u.first_name,' ',u.last_name) AS name,u.email,u.mobile FROM applications a JOIN users u ON u.id=a.user_id WHERE a.id=:id AND a.user_id=:user',['id'=>$applicationId,'user'=>$userId]);
+        $application=$db->fetch("SELECT a.*,CONCAT(u.first_name,' ',u.last_name) AS name,u.email,u.mobile FROM applications a JOIN users u ON u.id=a.user_id WHERE a.id=:id AND a.user_id=:user",['id'=>$applicationId,'user'=>$userId]);
         if(!$application)throw new RuntimeException('Application not found.');
         $type=in_array($application['status'],['selected','payment_pending'],true)?'admission_fee':'application_fee';
         $allowed=$type==='admission_fee'?['selected','payment_pending']:['submitted','resubmitted','eligibility_check','under_review','correction_required'];

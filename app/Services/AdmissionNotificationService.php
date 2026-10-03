@@ -85,7 +85,7 @@ final class AdmissionNotificationService
         try {
             $db = Database::get();
             $application = $db->fetch(
-                'SELECT a.id,a.application_number,a.user_id,CONCAT(u.first_name,' ',u.last_name) AS name,u.email FROM applications a JOIN users u ON u.id=a.user_id WHERE a.id=:id',
+                "SELECT a.id,a.application_number,a.user_id,CONCAT(u.first_name,' ',u.last_name) AS name,u.email FROM applications a JOIN users u ON u.id=a.user_id WHERE a.id=:id",
                 ['id' => $applicationId]
             );
             if (!$application) return;
