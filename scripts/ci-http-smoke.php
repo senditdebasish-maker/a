@@ -188,6 +188,8 @@ echo "PASS CMS page section create, translate, update, reorder, render and archi
 $cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
 $cyclePath='/admin/admissions/'.$cycleId;
 $admin->get($cyclePath,'Complete the admission notice in seven focused steps');
+$admin->get($cyclePath,'Divide seats and decide who is eligible');
+$admin->get($cyclePath,'Design the application form');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
 $cycleProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$cycleId.' AND program_id=1')->fetchColumn();
 $programPath=$cyclePath.'/programs/'.$cycleProgramId;
@@ -195,6 +197,9 @@ $admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_type'=>'marks
 $ruleId=(int)$ciDb->query('SELECT id FROM eligibility_rules WHERE cycle_program_id='.$cycleProgramId.' ORDER BY id DESC LIMIT 1')->fetchColumn();
 $admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_id'=>$ruleId,'rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'50','message'=>'Updated minimum marks required','is_blocking'=>1,'sort_order'=>20],'Eligibility rule saved');
 $sectionId=(int)$ciDb->query("SELECT id FROM admission_form_sections WHERE admission_cycle_id={$cycleId} AND section_key='personal'")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'','label'=>'CI automatically keyed question','field_type'=>'text','help_text'=>'Simple-builder key regression','sort_order'=>5,'status'=>'active'],'Form field saved');
+$generatedFieldKey=(string)$ciDb->query("SELECT field_key FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND label='CI automatically keyed question'")->fetchColumn();
+if($generatedFieldKey!=='ci_automatically_keyed_question')throw new RuntimeException('Simple form builder did not generate the internal field key from its label.');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'CI choice','field_type'=>'select','options'=>"yes|Yes\nno|No",'help_text'=>'Editable option test','is_required'=>1,'sort_order'=>10],'Form field saved');
 $fieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key='ci_choice'")->fetchColumn();
 $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['field_id'=>$fieldId,'section_id'=>$sectionId,'field_key'=>'ci_choice','label'=>'Updated CI choice','field_type'=>'radio','options'=>"yes|Yes please\nno|No thanks",'help_text'=>'Updated option test','conditional_rules'=>'{"field":"category","operator":"eq","value":"General"}','is_required'=>1,'sort_order'=>20,'status'=>'active'],'Form field saved');

@@ -147,10 +147,16 @@ foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission wizard is missing {$contract}.");
 }
 $wizardCss = file_get_contents($cssRoot . '/admission-wizard.css') ?: '';
-foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','@media(max-width:760px)'] as $contract) {
+foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','@media(max-width:760px)'] as $contract) {
     if (!str_contains($wizardCss, $contract)) $fail("admission-wizard.css: expected guided setup rule missing: {$contract}");
 }
+foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder'] as $contract) {
+    if (!str_contains($admissionWizard, $contract)) $fail("Guided admission setup is missing plain-language editor hook {$contract}.");
+}
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
+foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: guided admission editor contract is missing {$contract}.");
+}
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: sliding workspace contract is missing {$contract}.");
 }
