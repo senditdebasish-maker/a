@@ -212,8 +212,9 @@ GitHub Actions runs:
 11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
 12. Admin SMTP settings rendering, encrypted private password storage, blank-password preservation, audit/HTML secret exclusion and test-route delivery-mode validation.
 13. Strict merit verification, versioned formula/rank snapshots, deterministic open/reserved ranking, merit-only capacity-checked selection, deadline offers, milestone outbox and signed PayU settlement checks; route/schema audits also cover Razorpay/Cashfree adapters and webhook endpoints.
+14. A timed 2,005-application merit generation with contiguous category-rank checks on both MySQL 8.0 and MariaDB 10.4.
 
-Authoritative green run: `37147831340` at commit `3512d3f`.
+Authoritative green run: `37147976434` at commit `0d68e0c`.
 
 Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers, 2,000+ production-like merit load, the institution's exact reservation/eligibility policy and provider-owned sandbox/live gateway reconciliation.
 

@@ -1082,13 +1082,13 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 The current validated Release 1 baseline includes the polished admission-cycle and application workspaces, rejected-application attempts, automatic revisioned uploads, encrypted SMTP settings, strict Verified gate, frozen programme merit generations, public/private results, ranked selection offers, gateway/manual payments and milestone notification outbox:
 
 ```text
-3512d3f Restore payment received milestone dispatch
+0d68e0c Validate merit generation at two thousand applications
 ```
 
 The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, migration 006, RBAC/routes, strict merit gate, versioned deterministic ranking, capacity-checked selection, encrypted gateway configuration and signed PayU settlement regression coverage. Real provider sandbox reconciliation and a 2,000-record timed load test remain deployment acceptance items:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/37147831340
+https://github.com/senditdebasish-maker/a/actions/runs/37147976434
 ```
 
 Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.
