@@ -70,7 +70,7 @@ final class MeritService
             FROM applications a JOIN applicant_profiles profile ON profile.user_id=a.user_id
             LEFT JOIN education_records education ON education.application_id=a.id
             LEFT JOIN entrance_exams exam ON exam.application_id=a.id
-            WHERE a.admission_cycle_id=:cycle AND a.status IN ('verified','approved') AND a.eligibility_status='eligible'
+            WHERE a.admission_cycle_id=:cycle AND a.status='verified' AND a.eligibility_status='eligible'
             GROUP BY a.id,a.application_number,a.user_id,a.submitted_at,a.eligibility_flags,profile.category
             ORDER BY a.id",['cycle'=>$cycleId]);
         $preferences=$db->all("SELECT preference.application_id,preference.cycle_program_id,preference.preference_order
@@ -104,7 +104,7 @@ final class MeritService
             $version=(int)$db->scalar('SELECT COALESCE(MAX(version_no),0)+1 FROM merit_runs WHERE admission_cycle_id=:cycle',['cycle'=>$cycleId]);
             $distinct=[];$entryCount=0;
             $runId=$db->insert('merit_runs',[
-                'admission_cycle_id'=>$cycleId,'version_no'=>$version,'status'=>'draft','reservation_policy'=>$settings['reservation_policy'],'source_statuses'=>'verified,approved',
+                'admission_cycle_id'=>$cycleId,'version_no'=>$version,'status'=>'draft','reservation_policy'=>$settings['reservation_policy'],'source_statuses'=>'verified',
                 'criteria_hash'=>$criteriaHash,'applicant_count'=>0,'entry_count'=>0,'generated_by'=>$actorId,'generated_at'=>date('Y-m-d H:i:s'),'published_by'=>null,'published_at'=>null,'superseded_at'=>null,
             ]);
             foreach($programs as $program){
@@ -140,14 +140,14 @@ final class MeritService
             $run=$db->fetch("SELECT * FROM merit_runs WHERE id=:id FOR UPDATE",['id'=>$runId]);
             if(!$run||$run['status']!=='draft')throw new RuntimeException('Only a draft merit run can be published.');
             if((int)$run['entry_count']<1)throw new RuntimeException('An empty merit run cannot be published.');
-            $stale=(int)$db->scalar("SELECT COUNT(DISTINCT me.application_id) FROM merit_entries me JOIN applications a ON a.id=me.application_id WHERE me.merit_run_id=:run AND (a.status NOT IN ('verified','approved') OR a.eligibility_status<>'eligible')",['run'=>$runId]);
+            $stale=(int)$db->scalar("SELECT COUNT(DISTINCT me.application_id) FROM merit_entries me JOIN applications a ON a.id=me.application_id WHERE me.merit_run_id=:run AND (a.status<>'verified' OR a.eligibility_status<>'eligible')",['run'=>$runId]);
             if($stale>0)throw new RuntimeException("{$stale} ranked application(s) changed after generation. Generate a new frozen run instead of publishing stale evidence.");
             $db->query("UPDATE merit_runs SET status='superseded',superseded_at=NOW() WHERE admission_cycle_id=:cycle AND status='published'",['cycle'=>$run['admission_cycle_id']]);
             $db->update('merit_runs',['status'=>'published','published_by'=>$actorId,'published_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$runId]);
             $applications=$db->all("SELECT DISTINCT application_id FROM merit_entries WHERE merit_run_id=:run ORDER BY application_id",['run'=>$runId]);
             foreach($applications as $row){
                 $application=$db->fetch("SELECT status,status_version FROM applications WHERE id=:id FOR UPDATE",['id'=>$row['application_id']]);
-                if(!$application||!in_array($application['status'],['verified','approved'],true))continue;
+                if(!$application||$application['status']!=='verified')continue;
                 $db->update('applications',['status'=>'waitlisted','status_version'=>(int)$application['status_version']+1,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$row['application_id']]);
                 $db->insert('application_status_history',['application_id'=>$row['application_id'],'from_status'=>$application['status'],'to_status'=>'waitlisted','remarks'=>'Published in merit run v'.$run['version_no'],'changed_by'=>$actorId,'created_at'=>date('Y-m-d H:i:s')]);
                 $db->query("UPDATE merit_entries SET result_status='waitlisted' WHERE merit_run_id=:run AND application_id=:application AND result_status='ranked'",['run'=>$runId,'application'=>$row['application_id']]);

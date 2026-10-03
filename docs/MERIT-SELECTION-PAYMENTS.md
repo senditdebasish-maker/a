@@ -6,7 +6,7 @@ This module extends the existing admissions state machine; it does not replace a
 
 1. Applicant submission creates an application number and sends the **received** portal/email milestone.
 2. Staff starts review and the existing eligibility/document/accounts desks complete their work.
-3. **Verified for merit** is a strict server-side gate. It requires:
+3. **Verified for merit** is a strict server-side gate. Pre-upgrade `approved` records are not grandfathered into merit; staff must move them through Verified and the same checks. The gate requires:
    - overall and programme blocking eligibility checks to pass;
    - every applicable required `application`-stage document to have status `verified`;
    - the immutable application-fee assessment to be paid, waived, or zero; and

@@ -17,7 +17,7 @@ final class ApplicationWorkflowService
         'under_review'=>['correction_required','verified','rejected','withdrawn'],
         'correction_required'=>['resubmitted','rejected','withdrawn'],
         // approved remains supported for pre-upgrade records; all new UI uses verified.
-        'approved'=>['waitlisted','rejected','withdrawn'],
+        'approved'=>['verified','rejected','withdrawn'],
         'verified'=>['waitlisted','rejected','withdrawn'],
         'waitlisted'=>['selected','not_selected','rejected','withdrawn'],
         'selected'=>['payment_pending','fee_verified','admitted','offer_expired','rejected','withdrawn'],
