@@ -147,14 +147,14 @@ foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission wizard is missing {$contract}.");
 }
 $wizardCss = file_get_contents($cssRoot . '/admission-wizard.css') ?: '';
-foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','@media(max-width:760px)'] as $contract) {
+foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','.student-form-preview','.option-help','@media(max-width:760px)'] as $contract) {
     if (!str_contains($wizardCss, $contract)) $fail("admission-wizard.css: expected guided setup rule missing: {$contract}");
 }
-foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder'] as $contract) {
+foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder','data-open-editor','student-form-preview'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission setup is missing plain-language editor hook {$contract}.");
 }
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
-foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes'] as $contract) {
+foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes','admissionOptionHelp','[data-open-editor]'] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: guided admission editor contract is missing {$contract}.");
 }
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
@@ -175,6 +175,9 @@ foreach (['data-auto-upload','X-Requested-With','new FormData(form)','is-uploadi
     if (!str_contains($javascript, $contract)) $fail("app.js: automatic document persistence contract is missing {$contract}.");
 }
 $applicantApplication = file_get_contents($root . '/resources/views/student/application.php') ?: '';
+foreach (['$configuredFieldsByKey','$fieldLabel','$fieldHint','$sectionTitle','$sectionDescription'] as $contract) {
+    if (!str_contains($applicantApplication, $contract)) $fail("Applicant form is missing configurable student-view contract {$contract}.");
+}
 foreach (['Save & next','data-auto-upload','reapply-prompt','continue_to'] as $contract) {
     if (!str_contains($applicantApplication, $contract)) $fail("Applicant step form is missing {$contract}.");
 }

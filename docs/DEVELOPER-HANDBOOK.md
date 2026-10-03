@@ -450,8 +450,10 @@ The configuration editors deliberately translate internal structures into staff-
 
 - the seat editor explains category versus seat pool, displays the `programme intake = distributed seats` equation and calculates any shortage or excess in the browser while retaining server-side validation;
 - eligibility is presented as `applicant information + condition + required value`, while rule type, evaluation order and raw custom keys remain available under advanced settings;
-- the application-form designer separates sections from questions, groups questions by section, provides an active form map and hides stable keys, bindings and JSON conditions under advanced settings;
-- new section and question keys may be omitted by ordinary administrators and are then derived server-side from the title or label. Existing keys should remain stable once applications depend on them.
+- the application-form designer separates sections from questions, groups questions by section and provides a disabled student-style rendering made from the same section, field and preference UI components applicants receive; every preview section/question links directly to its editor;
+- built-in operational sections and bound questions allow safe copy/help customisation but keep their keys, type, binding, required state, position and visibility locked on both the client and server so the preview cannot promise behavior the applicant workflow does not support;
+- section titles, descriptions and built-in question labels/help are read from the same active configuration in the student application view, while new section and question keys may be omitted and derived server-side from the title or label;
+- each admission option heading receives a keyboard/touch-accessible `?` help marker; action buttons also expose purpose text through their native title.
 
 ### Staff application workflow
 

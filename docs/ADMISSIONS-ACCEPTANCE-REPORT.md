@@ -137,7 +137,8 @@ The super-admin receives the full permission set. Admission officers manage oper
 
 - Draft cycles are configured through one responsive seven-step workspace: notice and dates, programmes, seats and eligibility, fees, application form, documents, and final review/publication.
 - Seat distribution uses a plain-language intake equation and live shortage/excess feedback; eligibility rules use a sentence builder while the server remains authoritative.
-- Application form customisation separates sections from applicant questions, groups questions visually, provides an active form map and derives omitted internal keys server-side.
+- Application form customisation separates sections from applicant questions, groups questions visually, provides a student-style quick-edit preview, reuses configured section/field copy in the applicant view, protects operational bindings, and derives omitted internal keys server-side.
+- Contextual `?` help markers explain admission option headings on hover, keyboard focus or touch focus; action controls expose purpose text.
 - Existing programme defaults, capacity/category seats, eligibility and fee rules, form sections/fields/options/conditional JSON, and document requirements are editable rather than add-only; technical controls remain available under advanced settings.
 - Draft-only removal actions enforce ownership and usage guards so applicant-linked configuration is preserved; fields can be set inactive when deletion is not safe.
 - Readiness blocks publication until dates, programme, seats, eligibility, fees, required fields, documents, instructions and declaration are valid.
