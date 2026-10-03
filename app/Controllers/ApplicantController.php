@@ -53,8 +53,12 @@ final class ApplicantController extends Controller
         }
         $programSlug=trim((string)($_GET['program']??$_SESSION['intended_program_slug']??''));
         $db=Database::get();
-        $applicationId=$db->transaction(function (Database $db) use ($cycle,$programSlug): int {
-            $existing=$db->fetch('SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1 FOR UPDATE',['user'=>Auth::id(),'cycle'=>$cycle['id']]);
+        $attemptColumnsAvailable=$this->applicationAttemptColumnsAvailable();
+        $applicationId=$db->transaction(function (Database $db) use ($cycle,$programSlug,$attemptColumnsAvailable): int {
+            $existingSql=$attemptColumnsAvailable
+                ? 'SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1 FOR UPDATE'
+                : 'SELECT * FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY id DESC LIMIT 1 FOR UPDATE';
+            $existing=$db->fetch($existingSql,['user'=>Auth::id(),'cycle'=>$cycle['id']]);
             if ($existing) $id=(int)$existing['id'];
             else {
                 $version=$db->fetch("SELECT id FROM admission_configuration_versions WHERE admission_cycle_id=:cycle AND status IN ('published','seeded_baseline','legacy_import') ORDER BY CASE WHEN status='published' THEN 0 ELSE 1 END,version_no DESC LIMIT 1",['cycle'=>$cycle['id']]);
@@ -79,6 +83,10 @@ final class ApplicantController extends Controller
 
     public function reapply(string $id): never
     {
+        if(!$this->reapplicationSchemaReady()){
+            Flash::set('warning','Reapplication is temporarily unavailable while the database upgrade is pending. An administrator must apply migration 005.');
+            $this->redirect('student/dashboard');
+        }
         try {
             $application=(new ReapplicationService())->createAttempt((int)$id,(int)Auth::id());
             $_SESSION['active_application_id']=(int)$application['id'];
@@ -549,7 +557,7 @@ final class ApplicantController extends Controller
 
     private function canReapply(array $application): bool
     {
-        if(($application['status']??'')!=='rejected')return false;
+        if(!$this->reapplicationSchemaReady()||($application['status']??'')!=='rejected')return false;
         $latestId=(int)Database::get()->scalar('SELECT id FROM applications WHERE user_id=:user AND admission_cycle_id=:cycle ORDER BY attempt_no DESC,id DESC LIMIT 1',['user'=>Auth::id(),'cycle'=>$application['admission_cycle_id']]);
         if($latestId!==(int)$application['id'])return false;
         return (new AdmissionCycleService())->acceptsApplications([
@@ -568,7 +576,35 @@ final class ApplicantController extends Controller
             $record=$db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.id=:id AND a.user_id=:user',['id'=>$requested,'user'=>Auth::id()]);
             if ($record) return $record;
         }
-        return $db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.user_id=:user ORDER BY a.created_at DESC,a.attempt_no DESC,a.id DESC LIMIT 1',['user'=>Auth::id()]);
+        $order=$this->applicationAttemptColumnsAvailable()
+            ? 'a.created_at DESC,a.attempt_no DESC,a.id DESC'
+            : 'a.created_at DESC,a.id DESC';
+        return $db->fetch('SELECT a.*,ac.name AS cycle_name,ac.slug AS cycle_slug,ac.status AS cycle_status,ac.starts_at AS cycle_starts_at,ac.ends_at AS cycle_ends_at,ac.correction_deadline,ac.declaration_text,ac.max_program_preferences FROM applications a JOIN admission_cycles ac ON ac.id=a.admission_cycle_id WHERE a.user_id=:user ORDER BY '.$order.' LIMIT 1',['user'=>Auth::id()]);
+    }
+
+    private function applicationAttemptColumnsAvailable(): bool
+    {
+        static $available=null;
+        if($available!==null)return $available;
+        try{
+            $available=(int)Database::get()->scalar("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='applications' AND column_name='attempt_no'")===1;
+        }catch(\Throwable){
+            $available=false;
+        }
+        return $available;
+    }
+
+    private function reapplicationSchemaReady(): bool
+    {
+        static $ready=null;
+        if($ready!==null)return $ready;
+        if(!$this->applicationAttemptColumnsAvailable())return $ready=false;
+        try{
+            $ready=(int)Database::get()->scalar("SELECT COUNT(*) FROM schema_migrations WHERE version='005_application_reapply_attempts'")===1;
+        }catch(\Throwable){
+            $ready=false;
+        }
+        return $ready;
     }
 
     private function editableApplication(): array

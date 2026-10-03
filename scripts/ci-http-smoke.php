@@ -381,6 +381,10 @@ $appOneVersion=(int)$ciDb->query('SELECT status_version FROM applications WHERE 
 $admin->postWithCsrf('/admin/applications/1','/admin/applications/1/status',['status'=>'rejected','remarks'=>'CI reapplication coverage','status_version'=>$appOneVersion],'Application status updated with state and seat checks');
 $ciDb->exec("UPDATE admission_cycles SET status='published',starts_at=DATE_SUB(NOW(),INTERVAL 1 DAY),ends_at=DATE_ADD(NOW(),INTERVAL 30 DAY) WHERE id=1");
 $sourceBeforeReapply=$ciDb->query("SELECT a.application_number,(SELECT COUNT(*) FROM application_status_history history WHERE history.application_id=a.id) AS history_count,(SELECT SHA2(snapshot_json,256) FROM application_submission_snapshots snapshot WHERE snapshot.application_id=a.id) AS snapshot_checksum FROM applications a WHERE a.id=1")->fetch();
+$ciDb->exec("UPDATE schema_migrations SET version='005_application_reapply_attempts_pending' WHERE version='005_application_reapply_attempts'");
+$applicant->postWithCsrf('/student/dashboard','/student/applications/1/reapply',[],'database upgrade is pending');
+if((int)$ciDb->query('SELECT COUNT(*) FROM applications WHERE reapplied_from_application_id=1')->fetchColumn()!==0)throw new RuntimeException('Reapplication proceeded while migration 005 was pending.');
+$ciDb->exec("UPDATE schema_migrations SET version='005_application_reapply_attempts' WHERE version='005_application_reapply_attempts_pending'");
 $applicant->get('/student/application?application_id=1','Create new attempt');
 $applicant->get('/student/dashboard','Reapply with existing data');
 $applicant->postWithCsrf('/student/dashboard','/student/applications/1/reapply',[],'new application attempt was created with your existing details');
