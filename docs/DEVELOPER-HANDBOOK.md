@@ -444,7 +444,7 @@ Possible terminal/exception states: rejected, withdrawn
 6. application/admission document requirements;
 7. server-validated review, public preview and publication.
 
-Each step displays its own completion state. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
+Each step displays its own completion state. The branded command centre summarizes the application window, active programme and seat totals, configuration version, circular completion progress and currently selected step. The desktop step rail and mobile horizontal stepper distinguish ready, current and pending work. User-edited forms raise an accessible unsaved-change indicator and a native page-exit warning; normal server submission and no-JavaScript behavior remain unchanged. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
 
 The configuration editors deliberately translate internal structures into staff-facing language:
 

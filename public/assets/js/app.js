@@ -125,6 +125,8 @@
         const selected = index === nextIndex;
         link.classList.toggle('active', selected);
         link.setAttribute('aria-selected', String(selected));
+        if (selected) link.setAttribute('aria-current', 'step');
+        else link.removeAttribute('aria-current');
         link.setAttribute('tabindex', selected ? '0' : '-1');
         panels[index].hidden = !selected;
         panels[index].classList.toggle('active', selected);
@@ -132,6 +134,11 @@
       });
       const panel = panels[nextIndex];
       panel.classList.add(direction === 'forward' ? 'slide-forward' : 'slide-backward');
+      if (workspace.classList.contains('admission-wizard')) {
+        const currentStep = one('[data-wizard-current-step]');
+        const currentLabel = one('b', links[nextIndex]);
+        if (currentStep && currentLabel) currentStep.textContent = currentLabel.textContent.trim();
+      }
       if (navigation.scrollWidth > navigation.clientWidth) {
         const link = links[nextIndex];
         navigation.scrollTo({ left: Math.max(0, link.offsetLeft - navigation.clientWidth / 3), behavior: options.instant ? 'auto' : 'smooth' });
@@ -174,6 +181,44 @@
     window.addEventListener('hashchange', syncFromLocation);
     syncFromLocation();
   });
+
+  // Make unsaved admission configuration visible without changing normal form submission.
+  const admissionWizard = one('.admission-wizard');
+  const wizardSaveState = one('[data-wizard-save-state]');
+  if (admissionWizard && wizardSaveState) {
+    const wizardForms = all('form', admissionWizard);
+    const updateWizardSaveState = () => {
+      const dirtyCount = wizardForms.filter((form) => form.dataset.unsaved === 'true').length;
+      wizardSaveState.classList.toggle('is-dirty', dirtyCount > 0);
+      wizardSaveState.classList.remove('is-saving');
+      wizardSaveState.textContent = dirtyCount > 0
+        ? `${dirtyCount} form${dirtyCount === 1 ? '' : 's'} with unsaved changes — use its Save button`
+        : '✓ All displayed values are saved';
+    };
+    wizardForms.forEach((form) => {
+      const markDirty = (event) => {
+        if (event.target.matches('button, input[type="hidden"], input[type="submit"]')) return;
+        form.dataset.unsaved = 'true';
+        updateWizardSaveState();
+      };
+      form.addEventListener('input', markDirty);
+      form.addEventListener('change', markDirty);
+      form.addEventListener('reset', () => {
+        window.setTimeout(() => { delete form.dataset.unsaved; updateWizardSaveState(); }, 0);
+      });
+      form.addEventListener('submit', () => {
+        delete form.dataset.unsaved;
+        wizardSaveState.classList.remove('is-dirty');
+        wizardSaveState.classList.add('is-saving');
+        wizardSaveState.textContent = 'Saving and validating changes…';
+      });
+    });
+    window.addEventListener('beforeunload', (event) => {
+      if (!wizardForms.some((form) => form.dataset.unsaved === 'true')) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+  }
 
   // Admission setup: show the seat arithmetic before the administrator submits it.
   all('[data-seat-matrix]').forEach((form) => {

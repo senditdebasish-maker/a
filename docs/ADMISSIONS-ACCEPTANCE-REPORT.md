@@ -136,6 +136,7 @@ The super-admin receives the full permission set. Admission officers manage oper
 ## 6. Functional behavior
 
 - Draft cycles are configured through one responsive seven-step workspace: notice and dates, programmes, seats and eligibility, fees, application form, documents, and final review/publication.
+- A branded cycle command centre summarizes the live application window, programme count, configured seats, configuration version, circular completion progress and current editing step. The step rail exposes ready/current/to-do states, while an accessible unsaved-change indicator warns before navigating away from edited forms.
 - Seat distribution uses a plain-language intake equation and live shortage/excess feedback; eligibility rules use a sentence builder while the server remains authoritative.
 - Application form customisation separates sections from applicant questions, groups questions visually, provides a student-style quick-edit preview, reuses configured section/field copy in the applicant view, protects operational bindings, and derives omitted internal keys server-side.
 - Contextual `?` help markers explain admission option headings on hover, keyboard focus or touch focus; action controls expose purpose text.

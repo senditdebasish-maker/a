@@ -125,6 +125,7 @@ foreach ([
     '/assets/css/portal-extra.css'=>'.cms-module-layout',
     '/assets/css/ui-polish.css'=>'forced-colors:active',
     '/assets/css/admissions-admin.css'=>'.admission-workspace-nav',
+    '/assets/css/admission-wizard.css'=>'.setup-progress-ring',
 ] as $stylesheet=>$needle){
     $asset=$public->request('GET',$stylesheet);
     if($asset['status']!==200||!str_contains($asset['content_type'],'text/css')||!str_contains($asset['body'],$needle))throw new RuntimeException("Stylesheet {$stylesheet} was not served correctly.");
@@ -188,6 +189,8 @@ echo "PASS CMS page section create, translate, update, reorder, render and archi
 $cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
 $cyclePath='/admin/admissions/'.$cycleId;
 $admin->get($cyclePath,'Complete the admission notice in seven focused steps');
+$admin->get($cyclePath,'Admission cycle overview');
+$admin->get($cyclePath,'All displayed values are saved');
 $admin->get($cyclePath,'Divide seats and decide who is eligible');
 $admin->get($cyclePath,'Design the application form');
 $admin->get($cyclePath,'Student view and quick edit');

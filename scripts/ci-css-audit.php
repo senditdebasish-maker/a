@@ -143,18 +143,18 @@ foreach ([
     if (!str_contains($source, 'data-section-workspace') || !str_contains($source, 'data-section-tabs')) $fail("{$workspaceView}: sliding workspace hooks are missing.");
 }
 $admissionWizard = file_get_contents($root . '/resources/views/admin/admissions/show.php') ?: '';
-foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="fees"','id="form-builder"','id="documents"','id="review-publish"','Publish admission notice'] as $contract) {
+foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="fees"','id="form-builder"','id="documents"','id="review-publish"','Publish admission notice','setup-hero-metrics','setup-progress-ring','data-wizard-current-step','data-wizard-save-state'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission wizard is missing {$contract}.");
 }
 $wizardCss = file_get_contents($cssRoot . '/admission-wizard.css') ?: '';
-foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','.student-form-preview','.option-help','@media(max-width:760px)'] as $contract) {
+foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','.student-form-preview','.option-help','.setup-progress-ring','.setup-hero-metrics','.wizard-save-state.is-dirty','@media(max-width:760px)','@media(forced-colors:active)'] as $contract) {
     if (!str_contains($wizardCss, $contract)) $fail("admission-wizard.css: expected guided setup rule missing: {$contract}");
 }
 foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder','data-open-editor','student-form-preview'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission setup is missing plain-language editor hook {$contract}.");
 }
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
-foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes','admissionOptionHelp','[data-open-editor]'] as $contract) {
+foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes','admissionOptionHelp','[data-open-editor]','[data-wizard-save-state]',"addEventListener('beforeunload'", "setAttribute('aria-current', 'step')"] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: guided admission editor contract is missing {$contract}.");
 }
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
