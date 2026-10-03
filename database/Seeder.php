@@ -69,6 +69,7 @@ final class Seeder
             ['Publish admission cycles','admissions.publish','admissions'], ['Duplicate admission cycles','admissions.duplicate','admissions'],
             ['Manage admission forms','admission_forms.manage','admissions'], ['Manage admission documents','admission_documents.manage','admissions'],
             ['Manage admission fees','admission_fees.manage','admissions'], ['Manage admission seats','admission_seats.manage','admissions'],
+            ['Manage merit workspace','merit.manage','admissions'], ['Publish merit lists','merit.publish','admissions'],
             ['Manage correction requests','applications.correct','admissions'], ['Withdraw applications','applications.withdraw','admissions'],
             ['View documents','documents.view','documents'], ['Verify documents','documents.verify','documents'],
             ['View payments','payments.view','finance'], ['Verify payments','payments.verify','finance'], ['Reverse payments','payments.reverse','finance'],
@@ -88,7 +89,7 @@ final class Seeder
             $this->insert('role_permissions', ['role_id' => $super, 'permission_id' => $permissionId]);
         }
         $matrix = [
-            'admission-officer' => ['dashboard.view','applications.view','applications.review','applications.assign','applications.decide','applications.correct','applications.withdraw','admissions.view','admissions.manage','admissions.publish','admissions.duplicate','admission_forms.manage','admission_documents.manage','admission_fees.manage','admission_seats.manage','documents.view','documents.verify','payments.view','reports.view','reports.export','support.view','support.reply'],
+            'admission-officer' => ['dashboard.view','applications.view','applications.review','applications.assign','applications.decide','applications.correct','applications.withdraw','admissions.view','admissions.manage','admissions.publish','admissions.duplicate','admission_forms.manage','admission_documents.manage','admission_fees.manage','admission_seats.manage','merit.manage','merit.publish','documents.view','documents.verify','payments.view','reports.view','reports.export','support.view','support.reply'],
             'reviewer' => ['dashboard.view','applications.view','applications.review','applications.correct','admissions.view','documents.view','documents.verify'],
             'accounts-officer' => ['dashboard.view','applications.view','admissions.view','admission_fees.manage','payments.view','payments.verify','reports.view','reports.export'],
             'principal' => ['dashboard.view','applications.view','admissions.view','admissions.publish','documents.view','payments.view','reports.view','reports.export','audit.view'],

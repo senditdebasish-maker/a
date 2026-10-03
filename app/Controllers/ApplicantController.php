@@ -13,6 +13,7 @@ use App\Core\Translator;
 use App\Core\Validator;
 use App\Services\AdmissionCycleService;
 use App\Services\AdmissionFeeService;
+use App\Services\AdmissionNotificationService;
 use App\Services\ApplicationNumberService;
 use App\Services\ApplicationSnapshotService;
 use App\Services\AuditService;
@@ -267,6 +268,7 @@ final class ApplicantController extends Controller
         try { $eligibility=(new EligibilityService())->evaluate((int)$application['id']); }
         catch (\Throwable) { $eligibility=['status'=>'needs_review']; $db->update('applications',['eligibility_status'=>'needs_review','updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$application['id']]); }
         AuditService::log('application_submitted','application',$application['id'],[],['eligibility_status'=>$eligibility['status']]);
+        (new AdmissionNotificationService())->status((int)$application['id'],'submitted');
         Flash::set('success','Application submitted successfully. Your application number is now available.');
         $this->redirect('student/dashboard');
     }
@@ -349,6 +351,19 @@ final class ApplicantController extends Controller
         $this->redirect('student/application#review');
     }
 
+    public function merit(): void
+    {
+        $db=Database::get();
+        $application=$this->applicationRecord();
+        $run=null;$entries=[];$offer=null;
+        if($application){
+            $run=$db->fetch("SELECT mr.* FROM merit_runs mr JOIN merit_entries me ON me.merit_run_id=mr.id WHERE me.application_id=:application AND mr.status='published' ORDER BY mr.version_no DESC LIMIT 1",['application'=>$application['id']]);
+            if($run)$entries=$db->all("SELECT me.*,p.name AS program_name,p.code AS program_code FROM merit_entries me JOIN cycle_programs cp ON cp.id=me.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE me.merit_run_id=:run AND me.application_id=:application ORDER BY me.preference_order,me.merit_category",['run'=>$run['id'],'application'=>$application['id']]);
+            $offer=$db->fetch("SELECT offer.*,p.name AS program_name,p.code AS program_code,allocation.category,allocation.quota FROM selection_offers offer JOIN seat_allocations allocation ON allocation.id=offer.seat_allocation_id JOIN cycle_programs cp ON cp.id=allocation.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE offer.application_id=:application ORDER BY offer.id DESC LIMIT 1",['application'=>$application['id']]);
+        }
+        $this->view('student/merit',compact('application','run','entries','offer'),'student');
+    }
+
     public function payments(): void
     {
         $db = Database::get();
@@ -365,7 +380,9 @@ final class ApplicantController extends Controller
         $expectedAmount = (float) ($assessment['total_amount'] ?? $paymentInfo[$paymentType] ?? 0);
         $allowedStatuses=$paymentType==='admission_fee'?['selected','payment_pending']:['submitted','resubmitted','eligibility_check','under_review','correction_required','approved'];
         $paymentOpen = $application && in_array($application['status'],$allowedStatuses,true) && (!$assessment||!in_array($assessment['status'],['paid','waived','refunded'],true));
-        $this->view('student/payments', compact('application', 'payments', 'paymentInfo', 'paymentSettings', 'paymentType', 'assessment', 'expectedAmount', 'paymentOpen') + ['title' => 'Payments & receipts'], 'student');
+        $activeGateway=$db->fetch("SELECT provider,display_name,environment FROM payment_gateway_configs WHERE is_enabled=1 AND is_active=1 ORDER BY id LIMIT 1");
+        $offer=$application?$db->fetch("SELECT expires_at,status FROM selection_offers WHERE application_id=:application ORDER BY id DESC LIMIT 1",['application'=>$application['id']]):null;
+        $this->view('student/payments', compact('application', 'payments', 'paymentInfo', 'paymentSettings', 'paymentType', 'assessment', 'expectedAmount', 'paymentOpen', 'activeGateway', 'offer') + ['title' => 'Payments & receipts'], 'student');
     }
 
     public function submitPayment(): never
@@ -404,10 +421,12 @@ final class ApplicantController extends Controller
                 if ($paymentType==='admission_fee'&&$application['status']==='selected') {
                     $db->update('applications',['status'=>'payment_pending','status_version'=>(int)$application['status_version']+1,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$application['id']]);
                     $db->insert('application_status_history',['application_id'=>$application['id'],'from_status'=>'selected','to_status'=>'payment_pending','remarks'=>'Admission fee proof submitted','changed_by'=>Auth::id(),'created_at'=>date('Y-m-d H:i:s')]);
+                    $db->query("UPDATE selection_offers SET status='payment_received',payment_received_at=NOW(),updated_at=NOW() WHERE application_id=:application AND status='payment_due'",['application'=>$application['id']]);
                 }
                 return $id;
             });
             AuditService::log('payment_proof_submitted','payment',$id,[],['assessment_id'=>$assessment['id'],'type'=>$paymentType]);
+            (new AdmissionNotificationService())->paymentReceived((int)$application['id']);
             Flash::set('success','Payment proof submitted for Accounts verification.');
         } catch (RuntimeException $exception) {
             if ($stored&&is_file(BASE_PATH.'/storage/private/'.$stored['path'])) @unlink(BASE_PATH.'/storage/private/'.$stored['path']);

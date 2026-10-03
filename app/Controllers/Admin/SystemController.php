@@ -13,6 +13,7 @@ use App\Services\AuditService;
 use App\Services\BackupService;
 use App\Services\MailConfigurationService;
 use App\Services\MailService;
+use App\Services\PaymentGatewayService;
 use Throwable;
 
 final class SystemController extends Controller
@@ -113,7 +114,8 @@ final class SystemController extends Controller
         $settings = [];
         foreach (Database::get()->all('SELECT * FROM settings ORDER BY group_name, key_name') as $row) $settings[$row['key_name']] = $row;
         $mailSettings = (new MailConfigurationService())->forDisplay();
-        $this->view('admin/settings', compact('settings', 'mailSettings') + ['title' => 'College, email & admission settings'], 'admin');
+        $gatewayConfigs = (new PaymentGatewayService())->configurations();
+        $this->view('admin/settings', compact('settings', 'mailSettings', 'gatewayConfigs') + ['title' => 'College, email & admission settings'], 'admin');
     }
 
     public function updateSettings(): never
@@ -198,7 +200,7 @@ final class SystemController extends Controller
     private function rejectMailSettings(array $errors): never
     {
         $safeInput = $_POST;
-        unset($safeInput['_token'], $safeInput['mail_password']);
+        unset($safeInput['_token'], $safeInput['mail_password'], $safeInput['gateway']);
         Flash::withErrors($errors);
         Flash::withInput($safeInput);
         Flash::set('warning', 'Review the email delivery settings. The SMTP password was not retained in the form.');

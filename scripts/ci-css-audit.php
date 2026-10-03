@@ -197,7 +197,7 @@ foreach (['Save & next','data-auto-upload','reapply-prompt','continue_to'] as $c
 foreach (['.application-board','.workflow-column','.workflow-card','.bulk-workflow-bar','.application-lifecycle','.guided-review-summary'] as $contract) {
     if (!str_contains($polish, $contract)) $fail("ui-polish.css: graphical workflow rule is missing {$contract}.");
 }
-foreach (['database/migrations/004_cms_page_builder.php','database/migrations/005_application_reapply_attempts.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
+foreach (['database/migrations/004_cms_page_builder.php','database/migrations/005_application_reapply_attempts.php','database/migrations/006_merit_selection_payments.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
     if (!is_file($root . '/' . $builderFile)) $fail("CMS page builder file is missing: {$builderFile}");
 }
 

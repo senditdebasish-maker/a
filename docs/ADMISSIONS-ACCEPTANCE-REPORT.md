@@ -51,7 +51,7 @@ Cycle state and application state are separate. Public availability is calculate
 
 ## 3. Schema
 
-A clean installation contains **65 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder; migration 005 replaces the one-row-per-user/cycle constraint with non-destructive numbered attempts and self-lineage. No migration deletes admission records.
+A clean installation contains **75 tables**. Migration 002 added the admission configuration/workflow foundation; migration 003 adds immutable submission revisions; additive migration 004 adds the public CMS page-section builder; migration 005 replaces the one-row-per-user/cycle constraint with non-destructive numbered attempts and self-lineage; additive migration 006 adds frozen merit generations, selection offers, milestone mail outbox and verified online-payment evidence. No migration deletes admission records.
 
 Core admission additions are:
 
@@ -178,6 +178,23 @@ Implemented controls:
 
 No production database or deployment credentials were available in the development environment, so the actual installation still requires preflight, backup verification and post-migration checks.
 
+## 7A. Merit-to-admission feature status
+
+| Requested capability | Status | Exact evidence |
+|---|---|---|
+| Submitted application receives number and milestones | **PASS** | `ApplicantController::submitApplication`; `AdmissionNotificationService`; `admission_notification_outbox`. |
+| Strict admin Verified gate | **PASS** | `ApplicationWorkflowService::assertVerificationGate`; `scripts/ci-admission-workflow.php`. |
+| Configurable 100% programme formula and deterministic ties | **PASS** | `MeritService::saveFormula`, `MeritService::compare`; `resources/views/admin/merit/index.php`. |
+| Separate frozen/versioned cycle/programme/category/quota lists | **PASS** | migration 006 merit tables; `MeritService::generate` and `publish`. |
+| Open-first reservation policy | **PASS** | `merit_cycle_settings`; General/open plus eligible reserved-entry generation in `MeritService`. Institution policy acceptance is still required. |
+| Individual/batch ranked selection within seat capacity | **PASS** | `MeritController::select`/`batchSelect`; merit-entry validation in `ApplicationWorkflowService`; existing `SeatAllocationService` row locks. |
+| Private result plus anonymized public list | **PASS** | `/student/merit`; `/admissions/{slug}/merit`; public SELECT omits names/contact/marks. |
+| Offer deadline, expiry, seat release, manual promotion | **PASS** | `selection_offers`; `MeritService::expireDueOffers`; `scripts/expire-admission-offers.php`; no promotion path in the scheduled task. |
+| One active gateway plus manual fallback | **PASS** | `PaymentGatewayService`; Admin Settings gateway cards; `resources/views/student/payments.php`; encrypted write-only secrets. |
+| Real Razorpay/Cashfree/PayU provider reconciliation | **NOT TESTED** | No institution credentials or externally reachable registered webhook were available. Deployment procedure is in `docs/MERIT-SELECTION-PAYMENTS.md`. |
+| Email + portal milestones | **PASS** | `AdmissionNotificationService`; workflow/application/payment integrations; `scripts/process-admission-notifications.php`. Real SMTP remains environment acceptance. |
+| 2,000+ live-data performance/load target | **NOT TESTED** | Server-side generation, indexed lists, 100-row pagination and 200-row selection batches are implemented, but no 2,000-record timed load environment was available. |
+
 ## 8. Automated validation
 
 GitHub Actions runs:
@@ -185,19 +202,20 @@ GitHub Actions runs:
 1. Composer strict validation.
 2. Dependency installation.
 3. PHP syntax lint on PHP 8.1, 8.2 and 8.3.
-4. Clean MySQL/MariaDB schema import (65 tables).
+4. Clean MySQL/MariaDB schema import (75 tables).
 5. Production Seeder integrity checks.
-6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002–005, including attempt fields, replacement uniqueness and self-lineage.
+6. Existing-install baseline migration dry-run/apply/idempotency checks for migrations 002–006, including attempt fields, replacement uniqueness and self-lineage.
 7. Admission lifecycle, targeted correction, eligibility and immutable snapshot revision workflow checks.
 8. Public, applicant, staff, admissions, reports, CMS and PDF HTTP smoke routes on MySQL 8.0 and MariaDB 10.4.
 9. Reapplication ownership, latest-attempt and open-cycle gates; source immutability; copied/reset data; configuration version; duplicate-attempt prevention; Save & next; and automatic replacement revision checks.
 10. Draft-workspace HTTP mutations covering programme assignment, eligibility-rule edit, form-field option/conditional-rule edit, capacity/seat edit, fee edit and document requirement creation.
 11. Reviewer assigned-record success and unassigned application/generated-document 403 checks.
 12. Admin SMTP settings rendering, encrypted private password storage, blank-password preservation, audit/HTML secret exclusion and test-route delivery-mode validation.
+13. Strict merit verification, versioned formula/rank snapshots, deterministic open/reserved ranking, merit-only capacity-checked selection, deadline offers, milestone outbox and signed PayU settlement checks; route/schema audits also cover Razorpay/Cashfree adapters and webhook endpoints.
 
 Authoritative green run: `37144194979` at commit `778c66a`.
 
-Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers and the institution's exact reservation/eligibility policy.
+Manual production acceptance should additionally cover real SMTP, institution payment instructions, representative uploads, backup restore, mobile/tablet browsers, 2,000+ production-like merit load, the institution's exact reservation/eligibility policy and provider-owned sandbox/live gateway reconciliation.
 
 ## 9. Migration procedure
 
@@ -228,12 +246,13 @@ MySQL DDL auto-commits. The preferred rollback is a forward fix while retaining 
 - `database/migrations/003_submission_snapshot_revisions.rollback.md`
 - `database/migrations/004_cms_page_builder.rollback.md`
 - `database/migrations/005_application_reapply_attempts.rollback.md`
+- `database/migrations/006_merit_selection_payments.rollback.md`
 
 Do not drop admission tables or delete application/snapshot records in production. If an upgrade fails, keep maintenance mode active, capture the error and schema state, restore only from the verified backup when a forward fix is not viable, and reconcile uploaded private files created after that backup.
 
 ## 11. Known limitations / deployment decisions
 
-- Payment processing remains the repository's existing manual proof-and-verification architecture; no external gateway was invented.
+- Razorpay Payment Links, Cashfree Payment Links and PayU Hosted Checkout adapters are implemented with encrypted credentials and server verification, while the manual proof route remains mandatory. Real provider delivery is **NOT TESTED** without institution-owned sandbox credentials, registered HTTPS webhooks and provider reconciliation.
 - Programme catalogue records referenced by published cycles are intentionally not destructively edited or deleted in this workspace. Create a new programme record or duplicate a cycle when historical meaning would change.
 - Seat matrix capacity cannot be reduced below filled seats. Only empty draft rows can be deleted; rows with allocations are intentionally retained.
 - Automated tests use MySQL and HTTP/PDF smoke checks. Pixel-level cross-browser screenshots were not available in the sandbox and must be completed during deployment acceptance.

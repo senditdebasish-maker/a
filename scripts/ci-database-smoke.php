@@ -19,7 +19,7 @@ $pdo = new PDO(
 ], 'CI Pharmacy College', true);
 
 $expectations = [
-    'roles' => 14, 'permissions' => 36, 'users' => 8, 'programs' => 1,
+    'roles' => 14, 'permissions' => 38, 'users' => 8, 'programs' => 1,
     'admission_cycles' => 1, 'applications' => 5, 'pages' => 12, 'page_sections' => 10,
     'document_types' => 11, 'support_tickets' => 1,
     'admission_categories' => 6, 'admission_form_sections' => 5, 'admission_form_fields' => 20,
@@ -36,9 +36,9 @@ if ($adminPermissions !== (int) $pdo->query('SELECT COUNT(*) FROM permissions')-
 $statusRows = (int) $pdo->query('SELECT COUNT(*) FROM application_status_history')->fetchColumn();
 if ($statusRows < 5) throw new RuntimeException('Demo workflow status history was not seeded.');
 $tableCount = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")->fetchColumn();
-if ($tableCount !== 65) throw new RuntimeException("Expected 65 schema tables, got {$tableCount}");
-$migrationCount = (int) $pdo->query("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('001_initial_schema','002_admission_management','003_submission_snapshot_revisions','004_cms_page_builder','005_application_reapply_attempts')")->fetchColumn();
-if ($migrationCount !== 5) throw new RuntimeException('Clean-install migration ledger is incomplete.');
+if ($tableCount !== 75) throw new RuntimeException("Expected 75 schema tables, got {$tableCount}");
+$migrationCount = (int) $pdo->query("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('001_initial_schema','002_admission_management','003_submission_snapshot_revisions','004_cms_page_builder','005_application_reapply_attempts','006_merit_selection_payments')")->fetchColumn();
+if ($migrationCount !== 6) throw new RuntimeException('Clean-install migration ledger is incomplete.');
 $invalidAttempts=(int)$pdo->query('SELECT COUNT(*) FROM applications WHERE attempt_no<>1 OR reapplied_from_application_id IS NOT NULL')->fetchColumn();
 if($invalidAttempts!==0)throw new RuntimeException('Seeded clean-install applications do not start as unlinked attempt 1 records.');
 $attemptIndexColumns=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='applications' AND index_name='uq_user_cycle_attempt'")->fetchColumn();

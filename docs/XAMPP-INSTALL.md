@@ -89,6 +89,17 @@ C:\xampp\php\php.exe C:\xampp\htdocs\netaji-hub\scripts\scheduled-backup.php
 
 Use the project folder as the task's **Start in** directory, run it daily during a low-traffic window, capture non-zero exit codes, and copy successful `.zip.enc` files from `storage/backups/` to protected off-site storage. The command prevents concurrent runs and applies local retention. Test `scripts/restore-backup.php` with the original `APP_KEY` on an isolated installation.
 
+## Scheduled admissions jobs
+
+After migration 006, add two more Windows Task Scheduler tasks under the same restricted service account. Run offer expiry every 10–15 minutes and the email worker every 2–5 minutes:
+
+```powershell
+C:\xampp\php\php.exe C:\xampp\htdocs\netaji-hub\scripts\expire-admission-offers.php
+C:\xampp\php\php.exe C:\xampp\htdocs\netaji-hub\scripts\process-admission-notifications.php
+```
+
+Offer expiry releases a still-unpaid seat but deliberately does not auto-promote a waitlisted applicant. The mail worker drains and retries milestone-email jobs created by bulk publication, closure and expiry. Monitor non-zero exit codes. See `docs/MERIT-SELECTION-PAYMENTS.md` for gateway webhook URLs and operating checks.
+
 ## Static previews
 
 When PHP is unavailable, `public/preview.html`, `student-preview.html`, and `admin-preview.html` show the visual prototype only. The working PHP application uses `public/index.php`.

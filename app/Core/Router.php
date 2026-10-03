@@ -31,9 +31,15 @@ final class Router
         $path = $this->requestPath();
 
         if ($method === 'POST' && !Csrf::verify($_POST['_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null))) {
-            http_response_code(419);
-            View::render('errors/419', ['title' => 'Page expired'], 'auth');
-            return;
+            $exempt = false;
+            foreach ($this->routes as $candidate) {
+                if ($candidate['method'] === $method && in_array('csrf.exempt', $candidate['middleware'], true) && $this->match($candidate['path'], $path) !== null) { $exempt = true; break; }
+            }
+            if (!$exempt) {
+                http_response_code(419);
+                View::render('errors/419', ['title' => 'Page expired'], 'auth');
+                return;
+            }
         }
 
         foreach ($this->routes as $route) {

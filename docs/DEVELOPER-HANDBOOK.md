@@ -222,9 +222,9 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, `database/migrations/004_cms_page_builder.rollback.md`, and `database/migrations/005_application_reapply_attempts.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, `database/migrations/004_cms_page_builder.rollback.md`, `database/migrations/005_application_reapply_attempts.rollback.md`, and `database/migrations/006_merit_selection_payments.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
-## 8. Current database map (65 tables)
+## 8. Current database map (75 tables)
 
 ### Identity, access and configuration
 
@@ -273,11 +273,21 @@ These are shared masters. Admission-module work must reuse them rather than crea
 - `staff_notes`
 - `application_declarations`
 
+### Merit, selection and milestone delivery
+
+- `merit_cycle_settings` — cycle reservation, default quota and offer-window policy.
+- `merit_formula_versions` — immutable programme weight versions and tie order.
+- `merit_runs`, `merit_run_programs`, `merit_entries` — frozen generation, formula/component snapshots, list ranks and outcomes.
+- `selection_offers` — seat-allocation-linked payment deadlines and outcome timestamps.
+- `admission_notification_outbox` — retryable milestone email work; portal notification rows remain in `notifications`.
+
 ### Admission finance and student hand-off
 
 - `application_fee_assessments` — immutable per-application fee calculations.
 - `payments` — admission-stage manual payment proofs and verification, not a semester fee ledger.
 - `payment_refunds` — controlled refund decisions and processing history.
+- `payment_gateway_configs` — provider/mode plus encrypted write-only API and webhook secrets.
+- `payment_gateway_transactions`, `payment_gateway_events` — assessed online orders, verified outcomes and hashed callback/webhook evidence.
 - `seat_allocations` — transactional category/quota allocation history.
 - `student_enrollments` — student record created on admission while retaining the same `users` account.
 - `generated_documents` — metadata foundation for generated output.
