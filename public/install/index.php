@@ -12,6 +12,14 @@ function appBaseUrl(): string {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/install/index.php');
     $path = rtrim(dirname(dirname($script)), '/.');
+    // Root-front-controller deployments internally rewrite /install to
+    // public/install. Keep the generated APP_URL at the browser-visible root.
+    $rootLauncher = isset($_SERVER['NCP_ROOT_LAUNCHER'])
+        || isset($_SERVER['REDIRECT_NCP_ROOT_LAUNCHER'])
+        || getenv('NCP_ROOT_LAUNCHER') !== false
+        || getenv('REDIRECT_NCP_ROOT_LAUNCHER') !== false;
+    if ($rootLauncher || $path === '/public') $path = '';
+    elseif (str_ends_with($path, '/public')) $path = substr($path, 0, -strlen('/public'));
     return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($path ? $path : '');
 }
 

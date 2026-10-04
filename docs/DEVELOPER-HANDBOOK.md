@@ -879,18 +879,19 @@ Production must use HTTPS, `SESSION_SECURE=true`, working SMTP and a securely re
    composer install
    ```
 
-3. Start Apache and MySQL from XAMPP.
-4. Open:
+3. Install the guarded localhost-root launcher (the first run backs up XAMPP's existing entry files):
 
-   ```text
-   http://localhost/netaji-hub/public/install/
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\install-xampp-root.ps1 -Force
    ```
 
-5. Use a new/empty database.
-6. Leave demonstration data disabled for real institutional data.
-7. Keep the seeded 2027–28 cycle in Draft until all settings are reviewed.
+4. Start Apache and MySQL from XAMPP.
+5. Open `http://localhost/install/` for a new installation, or `http://localhost/` for an existing installation. Do not add `netaji-hub` or `public` to the URL.
+6. Use a new/empty database.
+7. Leave demonstration data disabled for real institutional data.
+8. Keep the seeded 2027–28 cycle in Draft until all settings are reviewed.
 
-Recommended local virtual host:
+Recommended production-style local virtual host:
 
 ```apache
 <VirtualHost *:80>
@@ -904,7 +905,7 @@ Recommended local virtual host:
 </VirtualHost>
 ```
 
-Never point the web root at the repository root. Only `public/` should be served.
+For production, prefer a virtual host whose document root is `public/`. The XAMPP localhost-root mode is intentionally supported for local deployment: its generated front controller exposes only `public/assets`, `public/install` and application routes, blocks direct access to the project folder, and keeps source/configuration/storage paths inaccessible.
 
 ## 25. Seeder behavior
 

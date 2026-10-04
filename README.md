@@ -60,13 +60,19 @@ See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md).
 composer install --no-dev --optimize-autoloader
 ```
 
+For XAMPP root URLs without a project-folder suffix, run the guarded launcher installer from the project folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-xampp-root.ps1 -Force
+```
+
 Then start Apache/MySQL and open:
 
 ```text
-http://localhost/netaji-hub/public/install/
+http://localhost/install/
 ```
 
-The installer checks PHP extensions, creates a new database, seeds content, writes `.env` outside `public/`, and locks itself after success.
+The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
 
 ## Demonstration accounts
 
@@ -89,12 +95,13 @@ app/Controllers/          Public, authentication, applicant and staff workflows
 app/Services/             Uploads, mail, audit and encrypted backups
 config/                   Application, database, mail and security configuration
 database/                 MySQL schema and configurable seeder
-public/                   Only intended web root; front controller and assets
+public/                   Browser-facing front controller, installer and assets
 public/install/           Locked first-run browser installer
 resources/lang/           EN/BN/HI interface dictionaries
 resources/views/          Public site, portals, documents and errors
 routes/web.php             GET/POST routes and permission middleware
 scripts/preflight.php     Production configuration check
+scripts/install-xampp-root.ps1  Backed-up localhost-root launcher installer
 scripts/scheduled-backup.php  Locked CLI backup and retention command
 scripts/restore-backup.php    Guarded encrypted-backup restoration
 storage/                  Private uploads, logs, sessions and encrypted backups

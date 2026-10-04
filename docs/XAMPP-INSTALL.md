@@ -7,19 +7,26 @@
 - Composer 2 is required once during setup. Composer is a PHP dependency manager; it is not Node.js and no Node server is used.
 - Apache `mod_rewrite` and `mod_headers` should be enabled.
 
-## Local installation
+## Local installation at `http://localhost/` (no folder in the URL)
 
 1. Copy the repository folder to `C:\xampp\htdocs\netaji-hub`.
-2. Open a terminal in that folder.
-3. Run:
+2. Open PowerShell in that folder and install PHP dependencies:
 
    ```powershell
    composer install --no-dev --optimize-autoloader
    ```
 
-4. Start **Apache** and **MySQL** in XAMPP Control Panel.
-5. Browse to `http://localhost/netaji-hub/public/install/`.
-6. Keep the XAMPP defaults unless you changed MySQL:
+3. Install the supplied htdocs-root launcher:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\install-xampp-root.ps1 -Force
+   ```
+
+   `-Force` is needed the first time because a standard XAMPP installation already has its own dashboard `index.php`. The script does **not** delete it: it backs up the existing htdocs `index.php` and `.htaccess` under `storage\backups\root-launcher-<timestamp>`, writes a small root front controller, blocks direct browser access to the project folder, and sets `APP_URL=http://localhost` when `.env` already exists.
+
+4. Start or restart **Apache** and **MySQL** in XAMPP Control Panel.
+5. For a new installation, browse to `http://localhost/install/`. For an existing installation, browse directly to `http://localhost/`.
+6. Keep the XAMPP database defaults unless you changed MySQL:
    - Host: `127.0.0.1`
    - Port: `3306`
    - Database: `netaji_pharmacy`
@@ -27,6 +34,8 @@
    - Password: blank on an unchanged local XAMPP installation
 7. Create a strong Super Admin account. Leave **demonstration data** unchecked for a real installation.
 8. The 2027–28 cycle starts in **Draft**. Review every rule before changing it to Open.
+
+If you prefer to make the project itself the htdocs root, copy the **contents** of the repository (not its containing folder) directly into `C:\xampp\htdocs`. The included root `index.php` and `.htaccess` provide the same clean URLs while protecting source/configuration directories. Back up or move the original XAMPP dashboard files first, then run the same PowerShell command from `C:\xampp\htdocs`; it detects that the project is already at the root and only normalises an existing `.env` to `APP_URL=http://localhost`.
 
 ## Recommended Apache virtual host
 

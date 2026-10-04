@@ -35,10 +35,26 @@ jobs:
               echo "::error file=$file::$message"
               failed=1
             fi
-          done < <(find app config database public resources routes scripts -name '*.php' -print0)
+          done < <(find index.php app config database public resources routes scripts -name '*.php' -print0)
           exit "$failed"
       - name: Audit CSS assets and layout references
         run: php scripts/ci-css-audit.php
+      - name: Audit XAMPP root deployment contracts
+        run: php scripts/ci-xampp-root-audit.php
+      - name: Parse XAMPP PowerShell launcher
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/install-xampp-root.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
 
   database-smoke:
     name: database-smoke (${{ matrix.database.name }})
