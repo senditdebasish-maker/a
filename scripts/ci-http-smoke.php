@@ -125,6 +125,7 @@ foreach ([
     '/assets/css/portal-extra.css'=>'.cms-module-layout',
     '/assets/css/ui-polish.css'=>'forced-colors:active',
     '/assets/css/admissions-admin.css'=>'.admission-workspace-nav',
+    '/assets/css/admission-wizard.css'=>'.setup-progress-ring',
 ] as $stylesheet=>$needle){
     $asset=$public->request('GET',$stylesheet);
     if($asset['status']!==200||!str_contains($asset['content_type'],'text/css')||!str_contains($asset['body'],$needle))throw new RuntimeException("Stylesheet {$stylesheet} was not served correctly.");
@@ -188,8 +189,11 @@ echo "PASS CMS page section create, translate, update, reorder, render and archi
 $cycleId=(int)$ciDb->query("SELECT id FROM admission_cycles WHERE code='CI-EDIT-28'")->fetchColumn();
 $cyclePath='/admin/admissions/'.$cycleId;
 $admin->get($cyclePath,'Complete the admission notice in seven focused steps');
+$admin->get($cyclePath,'Admission cycle overview');
+$admin->get($cyclePath,'All displayed values are saved');
 $admin->get($cyclePath,'Divide seats and decide who is eligible');
 $admin->get($cyclePath,'Design the application form');
+$admin->get($cyclePath,'Student view and quick edit');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/programs',['program_id'=>1,'seat_capacity'=>10,'application_fee'=>500,'admission_fee'=>5000,'minimum_marks_general'=>45,'minimum_marks_reserved'=>40,'min_age'=>17,'max_age'=>30,'accepted_entrance_exams'=>'WBJEE'],'Programme added');
 $cycleProgramId=(int)$ciDb->query('SELECT id FROM cycle_programs WHERE admission_cycle_id='.$cycleId.' AND program_id=1')->fetchColumn();
 $programPath=$cyclePath.'/programs/'.$cycleProgramId;
@@ -197,6 +201,14 @@ $admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_type'=>'marks
 $ruleId=(int)$ciDb->query('SELECT id FROM eligibility_rules WHERE cycle_program_id='.$cycleProgramId.' ORDER BY id DESC LIMIT 1')->fetchColumn();
 $admin->postWithCsrf($cyclePath,$programPath.'/eligibility',['rule_id'=>$ruleId,'rule_type'=>'marks','field_name'=>'class_12_percentage','operator'=>'gte','comparison_value'=>'50','message'=>'Updated minimum marks required','is_blocking'=>1,'sort_order'=>20],'Eligibility rule saved');
 $sectionId=(int)$ciDb->query("SELECT id FROM admission_form_sections WHERE admission_cycle_id={$cycleId} AND section_key='personal'")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-sections',['section_id'=>$sectionId,'section_key'=>'unsafe_personal_change','title'=>'Applicant profile','description'=>'Identity and profile information shown to applicants.','sort_order'=>10,'status'=>'inactive'],'Form section saved');
+$lockedSection=$ciDb->query('SELECT section_key,status,title FROM admission_form_sections WHERE id='.$sectionId)->fetch();
+if(!$lockedSection||$lockedSection['section_key']!=='personal'||$lockedSection['status']!=='active'||$lockedSection['title']!=='Applicant profile')throw new RuntimeException('Built-in student section identity was not protected while editable copy was saved.');
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'date_of_birth','label'=>'Applicant date of birth','field_type'=>'date','canonical_binding'=>'applicant_profiles.date_of_birth','help_text'=>'Use the date printed on official records.','is_required'=>1,'sort_order'=>1,'status'=>'active'],'Form field saved');
+$builtInFieldId=(int)$ciDb->query("SELECT id FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND field_key='date_of_birth'")->fetchColumn();
+$admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['field_id'=>$builtInFieldId,'section_id'=>$sectionId,'field_key'=>'unsafe_changed_key','label'=>'Configured date of birth','field_type'=>'text','canonical_binding'=>'','help_text'=>'Use the date printed on official records.','sort_order'=>999,'status'=>'inactive'],'Form field saved');
+$lockedBuiltIn=$ciDb->query('SELECT field_key,field_type,canonical_binding,is_required,sort_order,status FROM admission_form_fields WHERE id='.$builtInFieldId)->fetch();
+if(!$lockedBuiltIn||$lockedBuiltIn['field_key']!=='date_of_birth'||$lockedBuiltIn['field_type']!=='date'||$lockedBuiltIn['canonical_binding']!=='applicant_profiles.date_of_birth'||(int)$lockedBuiltIn['is_required']!==1||(int)$lockedBuiltIn['sort_order']!==1||$lockedBuiltIn['status']!=='active')throw new RuntimeException('Built-in student question technical settings were not preserved during visual-copy editing.');
 $admin->postWithCsrf($cyclePath,$cyclePath.'/form-fields',['section_id'=>$sectionId,'field_key'=>'','label'=>'CI automatically keyed question','field_type'=>'text','help_text'=>'Simple-builder key regression','sort_order'=>5,'status'=>'active'],'Form field saved');
 $generatedFieldKey=(string)$ciDb->query("SELECT field_key FROM admission_form_fields WHERE admission_cycle_id={$cycleId} AND label='CI automatically keyed question'")->fetchColumn();
 if($generatedFieldKey!=='ci_automatically_keyed_question')throw new RuntimeException('Simple form builder did not generate the internal field key from its label.');
@@ -235,6 +247,9 @@ $public->get('/admissions','CI Editable Cycle Updated');
 $public->get('/admissions/ci-editable-cycle','register?cycle=ci-editable-cycle');
 $public->get('/programs/bachelor-of-pharmacy','register?cycle=ci-editable-cycle&program=bachelor-of-pharmacy');
 $applicant->get('/admissions/ci-editable-cycle/apply','Updated CI choice');
+$applicant->get('/student/application','Applicant profile');
+$applicant->get('/student/application','Configured date of birth');
+$applicant->get('/student/application','Use the date printed on official records.');
 $newApplicationId=(int)$ciDb->query('SELECT a.id FROM applications a JOIN users u ON u.id=a.user_id WHERE u.email="ishita@demo.test" AND a.admission_cycle_id='.$cycleId)->fetchColumn();
 if($newApplicationId<1)throw new RuntimeException('Cycle-specific Apply Now did not create the expected application.');
 $widgetPage=$applicant->request('GET','/student/application');
@@ -364,10 +379,34 @@ foreach ([
     '/admin/cms/notices' => 'Notices records', '/admin/cms/faculty' => 'Faculty directory records',
     '/admin/cms/facilities' => 'Facilities records', '/admin/cms/faqs' => 'Frequently asked questions records',
     '/admin/cms/gallery' => 'Gallery records', '/admin/support' => 'Applicant support',
-    '/admin/enquiries' => 'Contact inbox', '/admin/settings' => 'College & admission settings',
+    '/admin/enquiries' => 'Contact inbox', '/admin/settings' => 'College, email &amp; admission settings',
     '/admin/users' => 'Users & roles', '/admin/roles' => 'Roles & permissions',
     '/admin/audit' => 'Audit trail', '/admin/backups' => 'Backup & recovery',
 ] as $path => $needle) $admin->get($path, $needle);
+$admin->get('/admin/settings#email','Email &amp; SMTP delivery');
+$smtpFixturePassword='CI-SMTP-'.bin2hex(random_bytes(12));
+$mailSettingsPayload=[
+    'mail_driver'=>'log','mail_host'=>'smtp.example.test','mail_port'=>587,'mail_auth'=>1,
+    'mail_username'=>'ci-mailer@example.test','mail_password'=>$smtpFixturePassword,'mail_encryption'=>'tls',
+    'mail_from_address'=>'ci-mailer@example.test','mail_from_name'=>'CI Pharmacy Mailer','mail_timeout'=>20,
+];
+$admin->postWithCsrf('/admin/settings#email','/admin/settings',$mailSettingsPayload,'Settings and email delivery configuration updated');
+$encryptedMailPassword=$ciDb->query("SELECT value FROM settings WHERE key_name='mail_password_encrypted'")->fetchColumn();
+$mailPasswordMetadata=$ciDb->query("SELECT value_type,is_public FROM settings WHERE key_name='mail_password_encrypted'")->fetch();
+if(!is_string($encryptedMailPassword)||$encryptedMailPassword===''||hash_equals($smtpFixturePassword,$encryptedMailPassword)||base64_decode($encryptedMailPassword,true)===false||strlen((string)base64_decode($encryptedMailPassword,true))<29)throw new RuntimeException('SMTP password was not stored as an authenticated encrypted value.');
+if(!$mailPasswordMetadata||$mailPasswordMetadata['value_type']!=='encrypted'||(int)$mailPasswordMetadata['is_public']!==0)throw new RuntimeException('SMTP password setting was not marked encrypted and private.');
+$mailAudit=(string)$ciDb->query("SELECT CONCAT(COALESCE(old_values,''),COALESCE(new_values,'')) FROM audit_logs WHERE action='settings_updated' ORDER BY id DESC LIMIT 1")->fetchColumn();
+if(str_contains($mailAudit,$smtpFixturePassword)||str_contains($mailAudit,'"username"'))throw new RuntimeException('SMTP credential leaked into the settings audit payload.');
+$mailSettingsPage=$admin->request('GET','/admin/settings#email');
+if($mailSettingsPage['status']!==200||!str_contains($mailSettingsPage['body'],'A password is stored securely')||str_contains($mailSettingsPage['body'],$smtpFixturePassword))throw new RuntimeException('SMTP settings page exposed or failed to report the stored password safely.');
+$admin->postWithCsrf('/admin/settings#email','/admin/settings',array_merge($mailSettingsPayload,['mail_password'=>'']),'Settings and email delivery configuration updated');
+if((string)$ciDb->query("SELECT value FROM settings WHERE key_name='mail_password_encrypted'")->fetchColumn()!==$encryptedMailPassword)throw new RuntimeException('Blank SMTP password input did not preserve the encrypted credential.');
+$testTokenPage=$admin->request('GET','/admin/settings#email');
+if(!preg_match('/name="_token" value="([^"]+)"/',$testTokenPage['body'],$mailTokenMatch))throw new RuntimeException('SMTP settings CSRF token not found.');
+$rejectedSecret='CI-REJECTED-'.bin2hex(random_bytes(8));
+$rejectedTest=$admin->request('POST','/admin/settings/email/test',['_token'=>html_entity_decode($mailTokenMatch[1])]+array_merge($mailSettingsPayload,['mail_password'=>$rejectedSecret,'mail_test_recipient'=>'ci-admin@example.test']));
+if($rejectedTest['status']!==200||!str_contains($rejectedTest['body'],'Choose SMTP delivery before sending a test email')||str_contains($rejectedTest['body'],$rejectedSecret))throw new RuntimeException('SMTP test validation did not reject log mode without retaining the posted password.');
+echo "PASS encrypted SMTP settings, password preservation, safe audit/rendering, and guarded test delivery\n";
 $admin->get('/admin/applications?view=board','Application lifecycle board');
 $admin->get('/admin/applications?view=table','records on this page');
 $admin->get('/admin/applications/1','Decision readiness');
@@ -447,6 +486,7 @@ $reviewer->postExpectStatus('/admin/applications?view=board','/admin/application
 $reviewer->expectStatus('/admin/applications/1',403);
 $reviewer->expectStatus('/admin/applications/1/generated/application',403);
 $reviewer->expectStatus('/admin/admissions/create',403);
+$reviewer->postExpectStatus('/admin/applications?view=board','/admin/settings/email/test',['mail_driver'=>'smtp','mail_test_recipient'=>'reviewer@demo.test'],403);
 $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/1/publish',[],403);
 $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/'.$copyId.'/form-fields',['section_id'=>1,'field_key'=>'forbidden','label'=>'Forbidden','field_type'=>'text'],403);
 

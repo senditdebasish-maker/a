@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Validator;
 use App\Services\AdmissionCycleService;
 use App\Services\AuditService;
+use App\Services\MailConfigurationService;
 use App\Services\MailService;
 
 final class AuthController extends Controller
@@ -47,7 +48,7 @@ final class AuthController extends Controller
             $_SESSION['mfa_pending_user_id'] = $userId;
             if (!$this->sendStaffMfaCode($userId, $email)) {
                 unset($_SESSION['mfa_pending_user_id']);
-                Flash::set('warning', 'The staff OTP could not be delivered. Configure working SMTP in .env, or temporarily set REQUIRE_STAFF_MFA=false during local setup.');
+                Flash::set('warning', 'The staff OTP could not be delivered. Configure and test working SMTP in Admin Settings, or temporarily set REQUIRE_STAFF_MFA=false during local setup.');
                 $this->redirect('login');
             }
             Flash::set('success', 'A six-digit sign-in code was sent to your staff email address.');
@@ -242,7 +243,7 @@ final class AuthController extends Controller
 
     private function sendStaffMfaCode(int $userId, string $email): bool
     {
-        if ((string) config('mail.driver', 'log') !== 'smtp') return false;
+        if ((string) (new MailConfigurationService())->current()['driver'] !== 'smtp') return false;
         $db = Database::get();
         $db->query('UPDATE mfa_challenges SET used_at = :now WHERE user_id = :user AND used_at IS NULL', ['now' => date('Y-m-d H:i:s'), 'user' => $userId]);
         $code = (string) random_int(100000, 999999);

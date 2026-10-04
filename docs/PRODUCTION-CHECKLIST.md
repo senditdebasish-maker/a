@@ -24,7 +24,7 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Set `APP_DEBUG=false`, a unique `APP_KEY`, `APP_ENV=production`, exact HTTPS `APP_URL`, and `SESSION_SECURE=true`.
 - [ ] Use HTTPS with automatic certificate renewal and HSTS at the proxy/web-server layer.
 - [ ] Restrict database and filesystem permissions; never expose `.env`, `storage/`, logs, or backups.
-- [ ] Configure authenticated SMTP; enable staff MFA only after testing OTP delivery and recovery.
+- [ ] Configure authenticated SMTP in Admin Settings (or the `.env` fallback), use **Save & send test email**, then enable staff MFA only after testing OTP delivery and recovery.
 - [ ] Configure PHP upload/body limits consistently with the application limit.
 - [ ] Add malware scanning for uploads if required by the institution’s risk assessment.
 
@@ -50,7 +50,11 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Registration → verification → sign-in → draft save → upload → final submit.
 - [ ] Reviewer assignment → document verification → correction request → resubmission.
 - [ ] Manual payment proof → accounts verification → receipt.
-- [ ] Selection → offer letter → fee verification → admission confirmation → enrollment record.
+- [ ] Strict Verified gate → 2,000+ candidate merit generation → deterministic tie checks → draft review → publication → private/public result privacy checks.
+- [ ] Ranked individual/batch selection → offer deadline → fee verification → admission confirmation → enrollment record.
+- [ ] Schedule and monitor `scripts/expire-admission-offers.php` and `scripts/process-admission-notifications.php`; confirm expiry releases a seat but does not auto-promote.
+- [ ] With institution-owned sandbox credentials, test active Razorpay/Cashfree/PayU success, failure, cancellation, duplicate callback, invalid signature, wrong amount, webhook retry and provider-to-receipt reconciliation before enabling live mode.
+- [ ] Confirm the manual bank/UPI fallback remains visible and functional while an online gateway is active.
 - [ ] Applicant support ticket → staff reply → applicant notification.
 - [ ] CMS translation fallback and public page publishing.
 - [ ] CSV/PDF output, print layouts, mobile layout, accessibility keyboard flow, and browser compatibility.

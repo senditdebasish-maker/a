@@ -39,7 +39,7 @@ foreach ($routes as $route) {
 
     if (!str_starts_with($path, '/admin')) continue;
     $adminCount++;
-    if (preg_match('#^/admin/(admissions|applications|payments|reports)(?:/|$)#', $path)) $admissionCount++;
+    if (preg_match('#^/admin/(admissions|applications|merit|payments|reports)(?:/|$)#', $path)) $admissionCount++;
 
     $middleware = (array) ($route['middleware'] ?? []);
     if (!in_array('auth', $middleware, true)) throw new RuntimeException("Admin route lacks auth middleware: {$key}");
@@ -56,8 +56,8 @@ foreach ($routes as $route) {
     if (!$reflection->isPublic()) throw new RuntimeException("Non-public handler {$class}::{$action} for {$key}");
 }
 
-if ($adminCount !== 71) throw new RuntimeException("Expected 71 protected admin routes, found {$adminCount}.");
-if ($admissionCount !== 41) throw new RuntimeException("Expected 41 admission/application/payment/report admin routes, found {$admissionCount}.");
+if ($adminCount !== 81) throw new RuntimeException("Expected 81 protected admin routes, found {$adminCount}.");
+if ($admissionCount !== 49) throw new RuntimeException("Expected 49 admission/application/merit/payment/report admin routes, found {$admissionCount}.");
 
 $routerSource = file_get_contents(BASE_PATH . '/app/Core/Router.php') ?: '';
 if (!str_contains($routerSource, "method === 'POST'") || !str_contains($routerSource, 'Csrf::verify')) {

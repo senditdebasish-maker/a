@@ -5,12 +5,12 @@ $canDecide=can('applications.decide');
 $canBulk=can('applications.assign')||$canDecide;
 $statusLabels=[
     'draft'=>'Draft','submitted'=>'Submitted','eligibility_check'=>'Eligibility check','under_review'=>'Under review',
-    'correction_required'=>'Corrections','resubmitted'=>'Resubmitted','approved'=>'Approved','selected'=>'Selected',
-    'payment_pending'=>'Payment pending','fee_verified'=>'Fee verified','admitted'=>'Admitted','rejected'=>'Rejected','withdrawn'=>'Withdrawn',
+    'correction_required'=>'Corrections','resubmitted'=>'Resubmitted','approved'=>'Verified (legacy)','verified'=>'Verified','waitlisted'=>'Waitlisted','selected'=>'Selected',
+    'payment_pending'=>'Payment pending','fee_verified'=>'Fee verified','admitted'=>'Admitted','offer_expired'=>'Offer expired','not_selected'=>'Not selected','rejected'=>'Rejected','withdrawn'=>'Withdrawn',
 ];
 $transitionLabels=[
     'submitted'=>'Mark submitted','resubmitted'=>'Mark resubmitted','eligibility_check'=>'Begin eligibility check','under_review'=>'Start review','correction_required'=>'Request corrections',
-    'approved'=>'Approve application','selected'=>'Select & allocate','payment_pending'=>'Request payment','fee_verified'=>'Mark fee verified',
+    'approved'=>'Verify for merit (legacy)','verified'=>'Verify for merit','waitlisted'=>'Publish to waitlist','selected'=>'Select from merit workspace','payment_pending'=>'Request payment','fee_verified'=>'Mark fee verified',
     'admitted'=>'Admit applicant','rejected'=>'Reject application','withdrawn'=>'Record withdrawal',
 ];
 $filterKeys=['status','q','cycle','program','category','eligibility','payment','reviewer'];
@@ -38,14 +38,15 @@ $recommended=static function(array $application):string{
     return match((string)$application['status']){
         'submitted','resubmitted'=>'Begin eligibility review',
         'eligibility_check'=>'Complete eligibility decision',
-        'under_review'=>'Review documents and decide',
+        'under_review'=>'Complete the strict Verified gate',
         'correction_required'=>'Await applicant resubmission',
-        'approved'=>'Open record to allocate a programme',
-        'selected'=>'Confirm payment request',
+        'approved','verified'=>'Include in the next frozen merit run',
+        'waitlisted'=>'Select through the merit workspace when capacity is available',
+        'selected'=>'Await admission-fee payment',
         'payment_pending'=>'Verify received payment',
         'fee_verified'=>'Complete admission checks',
         'admitted'=>'Admission complete',
-        'rejected','withdrawn'=>'Record closed',
+        'offer_expired','not_selected','rejected','withdrawn'=>'Record closed',
         default=>'Open guided review',
     };
 };
@@ -91,7 +92,7 @@ $recommended=static function(array $application):string{
         <strong data-selected-count aria-live="polite">0 selected</strong>
         <div class="bulk-workflow-actions">
             <?php if(can('applications.assign')):?><label><span class="sr-only">Assign selected records to</span><select name="assigned_to"><option value="">Choose reviewer…</option><?php foreach($reviewers as $reviewer):?><option value="<?= (int)$reviewer['id'] ?>"><?= e($reviewer['name']) ?></option><?php endforeach ?></select></label><button class="button button-outline button-sm" type="submit" formaction="<?= url('admin/applications/bulk/assign') ?>" data-confirm-bulk="Assign the selected applications to this reviewer? Existing assignments will be replaced.">Assign</button><?php endif ?>
-            <?php if(can('applications.decide')):?><label><span class="sr-only">Move selected records to</span><select name="bulk_status"><option value="">Choose status…</option><?php foreach(['eligibility_check','under_review','approved','payment_pending','fee_verified','admitted','rejected','withdrawn'] as $status):?><option value="<?= e($status) ?>"><?= e($statusLabels[$status]??ucwords(str_replace('_',' ',$status))) ?></option><?php endforeach ?></select></label><label class="bulk-reason"><span class="sr-only">Batch decision reason</span><input name="bulk_remarks" placeholder="Reason (required for closure)"></label><button class="button button-primary button-sm" type="submit" formaction="<?= url('admin/applications/bulk/status') ?>" data-confirm-bulk="Apply this transition to every selected application? Each record will still pass server-side workflow validation.">Apply status</button><?php endif ?>
+            <?php if(can('applications.decide')):?><label><span class="sr-only">Move selected records to</span><select name="bulk_status"><option value="">Choose status…</option><?php foreach(['eligibility_check','under_review','verified','payment_pending','fee_verified','admitted','rejected','withdrawn'] as $status):?><option value="<?= e($status) ?>"><?= e($statusLabels[$status]??ucwords(str_replace('_',' ',$status))) ?></option><?php endforeach ?></select></label><label class="bulk-reason"><span class="sr-only">Batch decision reason</span><input name="bulk_remarks" placeholder="Reason (required for closure)"></label><button class="button button-primary button-sm" type="submit" formaction="<?= url('admin/applications/bulk/status') ?>" data-confirm-bulk="Apply this transition to every selected application? Each record will still pass server-side workflow validation.">Apply status</button><?php endif ?>
         </div>
     </section><?php endif ?>
 

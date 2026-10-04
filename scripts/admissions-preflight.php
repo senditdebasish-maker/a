@@ -46,7 +46,7 @@ $invalidDates=(int)$db->scalar('SELECT COUNT(*) FROM admission_cycles WHERE ends
 if ($invalidDates) $errors[]="{$invalidDates} admission cycle(s) have invalid date ordering.";
 $unknownCycleStates=$db->all("SELECT status, COUNT(*) AS total FROM admission_cycles WHERE status NOT IN ('draft','open','published','closed','processing','archived') GROUP BY status");
 foreach ($unknownCycleStates as $row) $warnings[]="Unknown cycle status {$row['status']} appears on {$row['total']} record(s).";
-$unknownApplicationStates=$db->all("SELECT status, COUNT(*) AS total FROM applications WHERE status NOT IN ('draft','submitted','resubmitted','eligibility_check','under_review','correction_required','approved','selected','payment_pending','fee_verified','admitted','rejected','withdrawn') GROUP BY status");
+$unknownApplicationStates=$db->all("SELECT status, COUNT(*) AS total FROM applications WHERE status NOT IN ('draft','submitted','resubmitted','eligibility_check','under_review','correction_required','approved','verified','waitlisted','selected','payment_pending','fee_verified','admitted','offer_expired','not_selected','rejected','withdrawn') GROUP BY status");
 foreach ($unknownApplicationStates as $row) $warnings[]="Unknown application status {$row['status']} appears on {$row['total']} record(s).";
 $capacityMismatch=$db->all('SELECT cp.id, cp.seat_capacity, COALESCE(SUM(sm.seats),0) AS matrix_total FROM cycle_programs cp LEFT JOIN seat_matrix sm ON sm.cycle_program_id=cp.id GROUP BY cp.id HAVING matrix_total <> cp.seat_capacity');
 foreach ($capacityMismatch as $row) $warnings[]="Cycle-program #{$row['id']} capacity {$row['seat_capacity']} differs from seat matrix total {$row['matrix_total']}.";

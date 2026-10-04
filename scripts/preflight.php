@@ -17,6 +17,7 @@ else {
 
 use App\Core\Database;
 use App\Core\Env;
+use App\Services\MailConfigurationService;
 
 Env::load(BASE_PATH . '/.env');
 $checks = [];
@@ -28,7 +29,8 @@ $check('Debug mode disabled', !filter_var(env('APP_DEBUG', true), FILTER_VALIDAT
 $check('Strong application key', str_starts_with((string) env('APP_KEY', ''), 'base64:') && strlen((string) env('APP_KEY')) >= 50);
 $check('HTTPS application URL', str_starts_with((string) env('APP_URL', ''), 'https://'), (string) env('APP_URL', 'not configured'));
 $check('Secure session cookies', filter_var(env('SESSION_SECURE', false), FILTER_VALIDATE_BOOL));
-$check('SMTP email configured', env('MAIL_DRIVER') === 'smtp', 'Current driver: ' . env('MAIL_DRIVER', 'log'));
+$mailConfiguration = (new MailConfigurationService())->current();
+$check('SMTP email configured', !empty($mailConfiguration['complete']), 'Current driver: ' . $mailConfiguration['driver'] . '; source: ' . $mailConfiguration['source']);
 $check('Staff MFA required', filter_var(env('REQUIRE_STAFF_MFA', false), FILTER_VALIDATE_BOOL));
 foreach (['private','backups','logs','cache'] as $folder) $check('Writable storage/' . $folder, is_dir(BASE_PATH . '/storage/' . $folder) && is_writable(BASE_PATH . '/storage/' . $folder));
 try {

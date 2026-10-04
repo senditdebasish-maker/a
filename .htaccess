@@ -1,4 +1,5 @@
 Options -Indexes
+DirectoryIndex index.php
 
 <FilesMatch "^\.">
     Require all denied
@@ -6,7 +7,30 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Never serve application source, configuration, private storage or tooling.
+    RewriteRule ^\. - [F,L]
     RewriteRule ^(?:app|config|database|docs|resources|routes|scripts|storage|vendor)(?:/|$) - [F,L,NC]
-    RewriteRule ^(?:composer\.(?:json|lock)|README\.md)$ - [F,L,NC]
-    RewriteRule ^$ public/ [R=302,L]
+    RewriteRule ^(?:composer\.(?:json|lock)|README\.md|phpunit\.xml(?:\.dist)?)$ - [F,L,NC]
+
+    # Expose only the assets, installer and optional static previews that live
+    # below public/ when this repository itself is Apache's document root.
+    RewriteRule ^assets(?:/(.*))?$ public/assets/$1 [L,NC]
+    RewriteRule ^install/?$ public/install/index.php [QSA,L,NC,E=NCP_ROOT_LAUNCHER:1]
+    RewriteRule ^install/(.*)$ public/install/$1 [L,NC,E=NCP_ROOT_LAUNCHER:1]
+    RewriteRule ^(preview\.html|student-preview\.html|admin-preview\.html)$ public/$1 [L,NC]
+
+    # All application URLs use the root front controller, so /login,
+    # /admissions and portal routes work without /public or a project folder.
+    RewriteRule ^$ index.php [QSA,L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>

@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Flash;
 use App\Services\AdmissionFeeService;
+use App\Services\AdmissionNotificationService;
 use App\Services\ApplicationWorkflowService;
 use App\Services\AuditService;
 use App\Services\CorrectionService;
@@ -56,7 +57,7 @@ final class ApplicationController extends Controller
         foreach($applications as &$application)$application['allowed_transitions']=$workflow->allowedTransitions((string)$application['status']);unset($application);
         $countParams=[];$countWhere='deleted_at IS NULL';if(Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])){$countWhere.=' AND assigned_to=:reviewer';$countParams['reviewer']=Auth::id();}
         $summary=$db->fetch("SELECT COUNT(*) AS total,
-            SUM(CASE WHEN status IN ('submitted','resubmitted','eligibility_check','under_review','correction_required','approved','selected','payment_pending','fee_verified') THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN status IN ('submitted','resubmitted','eligibility_check','under_review','correction_required','approved','verified','waitlisted','selected','payment_pending','fee_verified') THEN 1 ELSE 0 END) AS active,
             SUM(CASE WHEN assigned_to IS NULL AND status NOT IN ('draft','admitted','rejected','withdrawn') THEN 1 ELSE 0 END) AS unassigned,
             SUM(CASE WHEN status IN ('submitted','resubmitted','eligibility_check','under_review') AND TIMESTAMPDIFF(DAY,COALESCE(submitted_at,created_at),NOW())>=3 THEN 1 ELSE 0 END) AS ageing,
             SUM(CASE WHEN status='correction_required' THEN 1 ELSE 0 END) AS corrections,
@@ -69,12 +70,12 @@ final class ApplicationController extends Controller
             ['key'=>'intake','label'=>'Intake','hint'=>'Submitted and resubmitted','statuses'=>['draft','submitted','resubmitted'],'target'=>'eligibility_check'],
             ['key'=>'review','label'=>'Review','hint'=>'Checks and officer review','statuses'=>['eligibility_check','under_review'],'target'=>'under_review'],
             ['key'=>'corrections','label'=>'Corrections','hint'=>'Waiting for applicant','statuses'=>['correction_required'],'target'=>'correction_required'],
-            ['key'=>'approved','label'=>'Approved','hint'=>'Ready for allocation','statuses'=>['approved'],'target'=>'approved'],
-            ['key'=>'selected','label'=>'Selected','hint'=>'Seat allocated','statuses'=>['selected'],'target'=>'selected'],
+            ['key'=>'approved','label'=>'Verified','hint'=>'Eligible for next merit run','statuses'=>['approved','verified'],'target'=>'verified'],
+            ['key'=>'selected','label'=>'Merit & offers','hint'=>'Waitlisted or selected','statuses'=>['waitlisted','selected'],'target'=>'selected'],
             ['key'=>'payment','label'=>'Payment','hint'=>'Admission fee due','statuses'=>['payment_pending'],'target'=>'payment_pending'],
             ['key'=>'verified','label'=>'Fee verified','hint'=>'Ready to admit','statuses'=>['fee_verified'],'target'=>'fee_verified'],
             ['key'=>'admitted','label'=>'Admitted','hint'=>'Enrolment created','statuses'=>['admitted'],'target'=>'admitted'],
-            ['key'=>'closed','label'=>'Closed','hint'=>'Rejected or withdrawn','statuses'=>['rejected','withdrawn'],'target'=>null],
+            ['key'=>'closed','label'=>'Closed','hint'=>'Rejected, expired or not selected','statuses'=>['rejected','withdrawn','offer_expired','not_selected'],'target'=>null],
         ];
         $status=$filters['status']; $search=$filters['q'];
         $this->view('admin/applications/index',compact('applications','summary','boardColumns','viewMode','status','search','filters','cycles','programs','categories','reviewers','total','page','pages')+['title'=>'Applications'],'admin');
@@ -158,6 +159,7 @@ final class ApplicationController extends Controller
         foreach ($targetKeys as $index=>$key) if (trim((string)$key)!=='') $items[]=['target_type'=>$targetTypes[$index]??'section','target_key'=>$key,'instructions'=>$instructions[$index]??($_POST['reason']??''),'form_field_id'=>$fieldIds[$index]??null,'document_type_id'=>$documentIds[$index]??null];
         try {
             (new CorrectionService())->request((int)$id,trim((string)($_POST['reason']??'')),($_POST['due_at']??'')?:null,$items,(int)Auth::id());
+            (new AdmissionNotificationService())->status((int)$id,'correction_required');
             Flash::set('success','Targeted correction request sent to the applicant.');
         } catch (RuntimeException $exception) { Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/applications/'.$id.'#decision');
@@ -200,7 +202,7 @@ final class ApplicationController extends Controller
         $ids=$this->bulkApplicationIds();
         $target=trim((string)($_POST['bulk_status']??''));
         $remarks=trim((string)($_POST['bulk_remarks']??''));
-        $allowedTargets=['eligibility_check','under_review','approved','payment_pending','fee_verified','admitted','rejected','withdrawn'];
+        $allowedTargets=['eligibility_check','under_review','verified','payment_pending','fee_verified','admitted','rejected','withdrawn'];
         if(!$ids||!in_array($target,$allowedTargets,true)){Flash::set('warning',$ids?'Choose a supported batch transition.':'Select at least one application.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
         if(in_array($target,['rejected','withdrawn'],true)&&$remarks===''){Flash::set('warning','Batch rejection or withdrawal requires an auditable reason.');$this->redirect($this->applicationIndexTarget((string)($_POST['return_to']??''),(string)($_POST['return_query']??'')));}
         $workflow=new ApplicationWorkflowService();$updated=0;$failures=[];
@@ -277,12 +279,13 @@ final class ApplicationController extends Controller
                     if ($application&&in_array($application['status'],['selected','payment_pending'],true)) {
                         $db->update('applications',['status'=>'fee_verified','status_version'=>(int)$application['status_version']+1,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>(int)$id]);
                         $db->insert('application_status_history',['application_id'=>(int)$id,'from_status'=>$application['status'],'to_status'=>'fee_verified','remarks'=>'Admission fee verified by Accounts','changed_by'=>Auth::id(),'created_at'=>date('Y-m-d H:i:s')]);
-                        $db->insert('notifications',['user_id'=>$application['user_id'],'type'=>'payment','title'=>'Admission fee verified','message'=>'Accounts verified your admission fee. Follow the dashboard for admission confirmation.','action_url'=>'/student/payments','read_at'=>null,'created_at'=>date('Y-m-d H:i:s')]);
+                        $db->query("UPDATE selection_offers SET status='payment_verified',payment_verified_at=NOW(),updated_at=NOW() WHERE application_id=:application AND status IN ('payment_due','payment_received')",['application'=>(int)$id]);
                     }
                 }
                 return $payment;
             });
             AuditService::log('payment_reviewed','payment',$payment['id'],['status'=>$payment['status']],['status'=>$status]);
+            if($status==='verified')(new AdmissionNotificationService())->status((int)$id,'fee_verified');
             Flash::set('success','Payment verification saved.');
         } catch (RuntimeException $exception) { Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/applications/'.$id.'#payments');

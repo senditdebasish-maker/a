@@ -143,18 +143,31 @@ foreach ([
     if (!str_contains($source, 'data-section-workspace') || !str_contains($source, 'data-section-tabs')) $fail("{$workspaceView}: sliding workspace hooks are missing.");
 }
 $admissionWizard = file_get_contents($root . '/resources/views/admin/admissions/show.php') ?: '';
-foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="fees"','id="form-builder"','id="documents"','id="review-publish"','Publish admission notice'] as $contract) {
+foreach (['admission-stepper','id="notice"','id="programmes"','id="rules"','id="fees"','id="form-builder"','id="documents"','id="review-publish"','Publish admission notice','setup-hero-metrics','setup-progress-ring','data-wizard-current-step','data-wizard-save-state'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission wizard is missing {$contract}.");
 }
 $wizardCss = file_get_contents($cssRoot . '/admission-wizard.css') ?: '';
-foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','@media(max-width:760px)'] as $contract) {
+foreach (['.admission-wizard','.admission-stepper','.wizard-panel-actions','.publication-review-grid','.step-guide','.seat-equation','.eligibility-sentence','.form-design-grid','.form-map-preview','.student-form-preview','.option-help','.setup-progress-ring','.setup-hero-metrics','.wizard-save-state.is-dirty','@media(max-width:760px)','@media(forced-colors:active)'] as $contract) {
     if (!str_contains($wizardCss, $contract)) $fail("admission-wizard.css: expected guided setup rule missing: {$contract}");
 }
-foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder'] as $contract) {
+foreach (['data-seat-matrix','data-seat-balance','data-field-builder','data-field-options','data-key-builder','data-open-editor','student-form-preview'] as $contract) {
     if (!str_contains($admissionWizard, $contract)) $fail("Guided admission setup is missing plain-language editor hook {$contract}.");
 }
+$settingsView = file_get_contents($root . '/resources/views/admin/settings.php') ?: '';
+foreach (['id="email"','data-mail-settings','data-mail-driver','mail_password','data-mail-test','admin/settings/email/test'] as $contract) {
+    if (!str_contains($settingsView, $contract)) $fail("Admin settings is missing secure SMTP setup contract {$contract}.");
+}
+foreach (['.mail-settings-section','.mail-setup-hero','.mail-fieldset','.mail-test-panel','.mail-security-grid'] as $contract) {
+    if (!str_contains($polish, $contract)) $fail("ui-polish.css: secure SMTP setup rule is missing {$contract}.");
+}
+foreach (['app/Services/MailConfigurationService.php','config/mail.php'] as $mailFile) {
+    if (!is_file($root . '/' . $mailFile)) $fail("Mail configuration file is missing: {$mailFile}");
+}
 $javascript = file_get_contents($root . '/public/assets/js/app.js') ?: '';
-foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes'] as $contract) {
+foreach (['[data-mail-settings]','[data-mail-driver]','[data-mail-password]','[data-mail-test]'] as $contract) {
+    if (!str_contains($javascript, $contract)) $fail("app.js: SMTP settings contract is missing {$contract}.");
+}
+foreach (['[data-seat-matrix]','[data-seat-balance]','[data-field-builder]','[data-key-builder]','optionFieldTypes','admissionOptionHelp','[data-open-editor]','[data-wizard-save-state]',"addEventListener('beforeunload'", "setAttribute('aria-current', 'step')"] as $contract) {
     if (!str_contains($javascript, $contract)) $fail("app.js: guided admission editor contract is missing {$contract}.");
 }
 foreach (['history.pushState', "addEventListener('popstate'", "setAttribute('aria-selected'", 'panel.hidden'] as $contract) {
@@ -175,13 +188,16 @@ foreach (['data-auto-upload','X-Requested-With','new FormData(form)','is-uploadi
     if (!str_contains($javascript, $contract)) $fail("app.js: automatic document persistence contract is missing {$contract}.");
 }
 $applicantApplication = file_get_contents($root . '/resources/views/student/application.php') ?: '';
+foreach (['$configuredFieldsByKey','$fieldLabel','$fieldHint','$sectionTitle','$sectionDescription'] as $contract) {
+    if (!str_contains($applicantApplication, $contract)) $fail("Applicant form is missing configurable student-view contract {$contract}.");
+}
 foreach (['Save & next','data-auto-upload','reapply-prompt','continue_to'] as $contract) {
     if (!str_contains($applicantApplication, $contract)) $fail("Applicant step form is missing {$contract}.");
 }
 foreach (['.application-board','.workflow-column','.workflow-card','.bulk-workflow-bar','.application-lifecycle','.guided-review-summary'] as $contract) {
     if (!str_contains($polish, $contract)) $fail("ui-polish.css: graphical workflow rule is missing {$contract}.");
 }
-foreach (['database/migrations/004_cms_page_builder.php','database/migrations/005_application_reapply_attempts.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
+foreach (['database/migrations/004_cms_page_builder.php','database/migrations/005_application_reapply_attempts.php','database/migrations/006_merit_selection_payments.php','resources/views/public/sections.php','resources/views/admin/cms/section-fields.php'] as $builderFile) {
     if (!is_file($root . '/' . $builderFile)) $fail("CMS page builder file is missing: {$builderFile}");
 }
 

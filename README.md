@@ -26,7 +26,10 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Dedicated database-driven Admissions workspace for cycle lifecycle, publication readiness, programme catalogue/assignment, seat matrices, eligibility, dynamic forms, documents, fees, preview, versioning and safe duplication.
 - One active application attempt per cycle, with a data-preserving new attempt after rejection, complete attempt history and ranked programme choices.
 - Personal, address, guardian, Class 10/12, entrance exam, programme preference, declaration and secure document workflows.
-- Draft, submission, assignment, review, correction, decision, fee verification and admission state history.
+- Draft, submission, assignment, review, correction, strict Verified-for-merit gate, decision, fee verification and admission state history.
+- Versioned programme merit formulae and frozen rank runs, open/reserved lists, private applicant results, anonymized public lists, waitlisting, capacity-checked batch offers and scheduled offer expiry without automatic promotion.
+- One active Razorpay, Cashfree or PayU hosted online gateway with encrypted write-only credentials, server-side callback/webhook verification and an always-available manual bank/UPI proof fallback.
+- Retryable email outbox plus portal notifications for every major application, merit, offer, payment and admission milestone.
 - Granular roles/permissions for Super Admin, Admissions, Reviewer, Accounts, Principal, HOD, Faculty, Librarian, Exam Cell, Office Staff, CMS, Support, Auditor and Applicant.
 - Applicant dashboard, document status, configured-fee payment proof, receipts, notifications and threaded helpdesk tickets.
 - Admin dashboard plus a responsive nine-stage application pipeline with Kanban and table views, workload/ageing/readiness signals, guided individual review, validated drag/button transitions, confirmed bulk assignment/status actions with partial-failure reporting, automated eligibility flags, document/payment decisions, notes, reports and CSV export.
@@ -57,13 +60,19 @@ See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md).
 composer install --no-dev --optimize-autoloader
 ```
 
+For XAMPP root URLs without a project-folder suffix, run the guarded launcher installer from the project folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-xampp-root.ps1 -Force
+```
+
 Then start Apache/MySQL and open:
 
 ```text
-http://localhost/netaji-hub/public/install/
+http://localhost/install/
 ```
 
-The installer checks PHP extensions, creates a new database, seeds content, writes `.env` outside `public/`, and locks itself after success.
+The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
 
 ## Demonstration accounts
 
@@ -86,12 +95,13 @@ app/Controllers/          Public, authentication, applicant and staff workflows
 app/Services/             Uploads, mail, audit and encrypted backups
 config/                   Application, database, mail and security configuration
 database/                 MySQL schema and configurable seeder
-public/                   Only intended web root; front controller and assets
+public/                   Browser-facing front controller, installer and assets
 public/install/           Locked first-run browser installer
 resources/lang/           EN/BN/HI interface dictionaries
 resources/views/          Public site, portals, documents and errors
 routes/web.php             GET/POST routes and permission middleware
 scripts/preflight.php     Production configuration check
+scripts/install-xampp-root.ps1  Backed-up localhost-root launcher installer
 scripts/scheduled-backup.php  Locked CLI backup and retention command
 scripts/restore-backup.php    Guarded encrypted-backup restoration
 storage/                  Private uploads, logs, sessions and encrypted backups
@@ -118,6 +128,7 @@ Release 1 admissions and website/CMS workflows are implemented. The sidebar item
 
 - [Complete developer handbook](docs/DEVELOPER-HANDBOOK.md)
 - [Admissions acceptance and operations report](docs/ADMISSIONS-ACCEPTANCE-REPORT.md)
+- [Merit, selection, payment and notification operations](docs/MERIT-SELECTION-PAYMENTS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [XAMPP installation](docs/XAMPP-INSTALL.md)
 - [Production checklist](docs/PRODUCTION-CHECKLIST.md)

@@ -82,6 +82,29 @@ final class PublicController extends Controller
         $this->view('public/admission-detail',compact('cycle','programs','requirements')+['title'=>$cycle['name']]+$cms);
     }
 
+    public function admissionMerit(string $slug): void
+    {
+        $db=Database::get();
+        $cycle=$db->fetch("SELECT * FROM admission_cycles WHERE slug=:slug AND status IN ('published','open','closed')",['slug'=>$slug]);
+        if(!$cycle){http_response_code(404);$this->view('errors/404',['title'=>'Merit list not found']);return;}
+        $run=$db->fetch("SELECT id,version_no,published_at FROM merit_runs WHERE admission_cycle_id=:cycle AND status='published' ORDER BY version_no DESC LIMIT 1",['cycle'=>$cycle['id']]);
+        $programs=$run?$db->all("SELECT DISTINCT cp.id,p.name,p.code FROM merit_entries me JOIN cycle_programs cp ON cp.id=me.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE me.merit_run_id=:run ORDER BY p.name",['run'=>$run['id']]):[];
+        $categories=$run?$db->all("SELECT DISTINCT merit_category FROM merit_entries WHERE merit_run_id=:run ORDER BY merit_category",['run'=>$run['id']]):[];
+        $programId=(int)($_GET['program']??0);$category=trim((string)($_GET['category']??''));$page=max(1,(int)($_GET['page']??1));$perPage=100;$offset=($page-1)*$perPage;
+        $entries=[];$total=0;
+        if($run){
+            $where=['me.merit_run_id=:run'];$params=['run'=>$run['id']];
+            if($programId>0){$where[]='me.cycle_program_id=:program';$params['program']=$programId;}
+            if($category!==''){$where[]='me.merit_category=:category';$params['category']=$category;}
+            $whereSql=implode(' AND ',$where);
+            $total=(int)$db->scalar("SELECT COUNT(*) FROM merit_entries me WHERE {$whereSql}",$params);
+            // Public results intentionally expose only application number, ranks, list grouping and outcome.
+            $entries=$db->all("SELECT me.application_number,me.overall_rank,me.category_rank,me.merit_category,me.quota,me.result_status,p.name AS program_name,p.code AS program_code FROM merit_entries me JOIN cycle_programs cp ON cp.id=me.cycle_program_id JOIN programs p ON p.id=cp.program_id WHERE {$whereSql} ORDER BY p.name,me.merit_category,me.category_rank LIMIT {$perPage} OFFSET {$offset}",$params);
+        }
+        $cms=$this->cmsData('admissions');
+        $this->view('public/admission-merit',compact('cycle','run','programs','categories','programId','category','entries','total','page','perPage')+['title'=>'Merit list · '.$cycle['name']]+$cms);
+    }
+
     public function admissionProspectus(string $slug): never
     {
         $cycle=(new AdmissionCycleService())->publicCycle($slug);

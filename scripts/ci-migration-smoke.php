@@ -47,7 +47,7 @@ if ($phase === 'seed') {
 
 $assert = static function (bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); };
 $tableCount=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'")->fetchColumn();
-$assert($tableCount===65,"Expected 65 tables after upgrade, got {$tableCount}");
+$assert($tableCount===75,"Expected 75 tables after upgrade, got {$tableCount}");
 $cycle=$pdo->query("SELECT status, slug, configuration_version FROM admission_cycles WHERE code='LEGACY-26'")->fetch();
 $assert($cycle['status']==='published' && $cycle['slug']==='legacy-26' && (int)$cycle['configuration_version']===1,'Legacy cycle was not normalized/versioned.');
 $app=$pdo->query("SELECT id,configuration_version_id,attempt_no,reapplied_from_application_id FROM applications WHERE application_number='NCP-26-BPH-0001'")->fetch();
@@ -66,6 +66,9 @@ $ledger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version
 $assert(is_string($ledger)&&strlen($ledger)===64,'CMS builder migration checksum was not recorded.');
 $reapplyLedger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='005_application_reapply_attempts'")->fetchColumn();
 $assert(is_string($reapplyLedger)&&strlen($reapplyLedger)===64,'Reapplication-attempt migration checksum was not recorded.');
+$meritLedger=$pdo->query("SELECT checksum_sha256 FROM schema_migrations WHERE version='006_merit_selection_payments'")->fetchColumn();
+$assert(is_string($meritLedger)&&strlen($meritLedger)===64,'Merit and payment migration checksum was not recorded.');
+foreach(['merit_formula_versions','merit_runs','merit_entries','selection_offers','admission_notification_outbox','payment_gateway_configs','payment_gateway_transactions','payment_gateway_events'] as $table)$assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='".$table."'")->fetchColumn()===1,"Merit/payment table {$table} is missing.");
 $assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='applications' AND index_name='uq_user_cycle'")->fetchColumn()===0,'Obsolete one-application-per-cycle index remains.');
 $assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='applications' AND index_name='uq_user_cycle_attempt'")->fetchColumn()===3,'Per-attempt uniqueness index is incomplete.');
 $assert((int)$pdo->query("SELECT COUNT(*) FROM pages WHERE slug IN ('home','about','programs','admissions','facilities','faculty','notices','gallery','faq','contact','privacy','terms')")->fetchColumn()===12,'Public CMS page shells were not backfilled.');

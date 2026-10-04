@@ -54,6 +54,61 @@
     });
   });
 
+  // Settings: explain the selected delivery mode and keep SMTP credentials private.
+  all('[data-mail-settings]').forEach((settings) => {
+    const driver = one('[data-mail-driver]', settings);
+    const auth = one('[data-mail-auth]', settings);
+    const password = one('[data-mail-password]', settings);
+    const clearPassword = one('[data-mail-clear-password]', settings);
+    const passwordToggle = one('[data-mail-password-toggle]', settings);
+    const modeBadge = one('[data-mail-mode-badge]', settings);
+    const modeCopy = one('[data-mail-mode-copy]', settings);
+    const testButton = one('[data-mail-test]', settings);
+    if (!driver) return;
+
+    const syncMailSettings = () => {
+      const smtp = driver.value === 'smtp';
+      const authenticated = Boolean(auth?.checked);
+      const clearing = Boolean(clearPassword?.checked);
+      settings.classList.toggle('is-mail-log-mode', !smtp);
+      all('[data-smtp-required]', settings).forEach((field) => { field.required = smtp; });
+      all('[data-smtp-auth-required]', settings).forEach((field) => { field.required = smtp && authenticated; });
+      if (password) {
+        password.disabled = clearing;
+        password.required = smtp && authenticated && password.dataset.passwordConfigured !== '1' && !clearing;
+        if (clearing) password.value = '';
+      }
+      if (passwordToggle) passwordToggle.disabled = clearing;
+      if (testButton) {
+        testButton.disabled = !smtp;
+        testButton.title = smtp ? 'Save these settings and send a real test email.' : 'Select SMTP delivery to send a test email.';
+      }
+      if (modeBadge) {
+        modeBadge.classList.toggle('is-live', smtp);
+        modeBadge.classList.toggle('is-log', !smtp);
+        modeBadge.textContent = smtp ? 'SMTP enabled' : 'Local log mode';
+      }
+      const modeTitle = modeCopy?.querySelector('b');
+      const modeDescription = modeCopy?.querySelector('span');
+      if (modeTitle) modeTitle.textContent = smtp ? 'Live delivery selected' : 'Development safety mode';
+      if (modeDescription) modeDescription.textContent = smtp
+        ? 'Messages will be delivered through the server below after validation.'
+        : 'Non-sensitive messages are logged; OTPs and account links are suppressed.';
+    };
+
+    passwordToggle?.addEventListener('click', () => {
+      if (!password) return;
+      const visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      passwordToggle.textContent = visible ? 'Show' : 'Hide';
+      passwordToggle.setAttribute('aria-pressed', String(!visible));
+    });
+    driver.addEventListener('change', syncMailSettings);
+    auth?.addEventListener('change', syncMailSettings);
+    clearPassword?.addEventListener('change', syncMailSettings);
+    syncMailSettings();
+  });
+
   all('[data-confirm]').forEach((element) => {
     element.addEventListener('click', (event) => {
       if (!window.confirm(element.dataset.confirm)) event.preventDefault();
@@ -125,6 +180,8 @@
         const selected = index === nextIndex;
         link.classList.toggle('active', selected);
         link.setAttribute('aria-selected', String(selected));
+        if (selected) link.setAttribute('aria-current', 'step');
+        else link.removeAttribute('aria-current');
         link.setAttribute('tabindex', selected ? '0' : '-1');
         panels[index].hidden = !selected;
         panels[index].classList.toggle('active', selected);
@@ -132,6 +189,11 @@
       });
       const panel = panels[nextIndex];
       panel.classList.add(direction === 'forward' ? 'slide-forward' : 'slide-backward');
+      if (workspace.classList.contains('admission-wizard')) {
+        const currentStep = one('[data-wizard-current-step]');
+        const currentLabel = one('b', links[nextIndex]);
+        if (currentStep && currentLabel) currentStep.textContent = currentLabel.textContent.trim();
+      }
       if (navigation.scrollWidth > navigation.clientWidth) {
         const link = links[nextIndex];
         navigation.scrollTo({ left: Math.max(0, link.offsetLeft - navigation.clientWidth / 3), behavior: options.instant ? 'auto' : 'smooth' });
@@ -174,6 +236,44 @@
     window.addEventListener('hashchange', syncFromLocation);
     syncFromLocation();
   });
+
+  // Make unsaved admission configuration visible without changing normal form submission.
+  const admissionWizard = one('.admission-wizard');
+  const wizardSaveState = one('[data-wizard-save-state]');
+  if (admissionWizard && wizardSaveState) {
+    const wizardForms = all('form', admissionWizard);
+    const updateWizardSaveState = () => {
+      const dirtyCount = wizardForms.filter((form) => form.dataset.unsaved === 'true').length;
+      wizardSaveState.classList.toggle('is-dirty', dirtyCount > 0);
+      wizardSaveState.classList.remove('is-saving');
+      wizardSaveState.textContent = dirtyCount > 0
+        ? `${dirtyCount} form${dirtyCount === 1 ? '' : 's'} with unsaved changes — use its Save button`
+        : '✓ All displayed values are saved';
+    };
+    wizardForms.forEach((form) => {
+      const markDirty = (event) => {
+        if (event.target.matches('button, input[type="hidden"], input[type="submit"]')) return;
+        form.dataset.unsaved = 'true';
+        updateWizardSaveState();
+      };
+      form.addEventListener('input', markDirty);
+      form.addEventListener('change', markDirty);
+      form.addEventListener('reset', () => {
+        window.setTimeout(() => { delete form.dataset.unsaved; updateWizardSaveState(); }, 0);
+      });
+      form.addEventListener('submit', () => {
+        delete form.dataset.unsaved;
+        wizardSaveState.classList.remove('is-dirty');
+        wizardSaveState.classList.add('is-saving');
+        wizardSaveState.textContent = 'Saving and validating changes…';
+      });
+    });
+    window.addEventListener('beforeunload', (event) => {
+      if (!wizardForms.some((form) => form.dataset.unsaved === 'true')) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+  }
 
   // Admission setup: show the seat arithmetic before the administrator submits it.
   all('[data-seat-matrix]').forEach((form) => {
@@ -221,6 +321,140 @@
     const syncOptions = () => { options.hidden = !optionFieldTypes.has(type.value); };
     type.addEventListener('change', syncOptions);
     syncOptions();
+  });
+
+  // Admission setup help is available beside every option heading, not hidden in a separate manual.
+  const admissionOptionHelp = {
+    'Academic session': 'Select the academic year to which this admission notice and its applications belong.',
+    'Cycle name': 'The public name staff and applicants use for this admission process.',
+    'Cycle code': 'A short unique identifier used in administration and reports, for example UG-2027.',
+    'Public slug': 'The web-address ending for the public Admissions page. Use a short readable value.',
+    'Applications open': 'The date and time when eligible applicants can start or access applications.',
+    'Applications close': 'The final date and time for starting, editing and submitting applications.',
+    'Correction deadline': 'Optional final time by which requested applicant corrections must be completed.',
+    'Application number prefix': 'Characters placed before each generated application number.',
+    'Maximum preferences': 'The maximum number of programmes one applicant may rank in this cycle.',
+    'Closing-soon threshold (hours)': 'How many hours before closing the public site begins showing a closing-soon warning.',
+    'Public admission summary': 'A short introduction displayed on the public admission notice.',
+    'Applicant instructions': 'Step-by-step guidance applicants should read before and during application.',
+    'Applicant declaration': 'The statement applicants must accept before final submission.',
+    'Prospectus PDF (maximum 10 MB)': 'Optional prospectus applicants can open from the public admission notice.',
+    'General category minimum (%)': 'Minimum Class 12 percentage used for applicants in the General category.',
+    'Reserved category minimum (%)': 'Minimum Class 12 percentage used for non-General reservation categories.',
+    'Programme state': 'Active programmes can be selected by applicants; inactive ones remain stored but unavailable.',
+    'Minimum age': 'Youngest permitted age when this admission cycle opens.',
+    'Maximum age': 'Oldest permitted age when this admission cycle opens. Leave blank when no maximum applies.',
+    'Accepted entrance examinations': 'Names of qualifying entrance examinations accepted for this programme.',
+    'Programme': 'The programme being included in this admission cycle.',
+    'Initial capacity': 'The approved total intake before it is divided into categories and seat pools.',
+    'Application fee': 'Amount assessed for submitting an application to this programme.',
+    'Admission fee': 'Amount assessed after an applicant is selected for admission.',
+    'Approved programme intake': 'The final seat total. Every category and seat-pool row must add up to this number.',
+    'Reservation category': 'The reservation group that may receive this row of seats, such as General, SC or ST.',
+    'Seat pool / quota': 'The source or pool of these seats, such as State, Management or NRI.',
+    'Number of seats': 'How many seats belong to this category and seat-pool combination.',
+    'Applicant information to check': 'Choose the applicant answer the eligibility engine should examine.',
+    'Condition': 'How the applicant answer is compared with the required value, for example at least or contains.',
+    'Required value': 'The threshold, accepted text or list the applicant answer is compared against.',
+    'Plain-language result shown to staff': 'A readable explanation recorded with the eligibility result.',
+    'Rule category': 'Groups this eligibility check as marks, age, subject, entrance or another rule type.',
+    'Evaluation order': 'Controls which eligibility check is evaluated first. Lower numbers come first.',
+    'Fee type': 'Application fee is due during application; admission fee is due after selection.',
+    'Category override': 'Use All categories for the normal amount, or choose one category for a special amount.',
+    'State': 'Active fee rules are used for assessment; inactive rules are retained but ignored.',
+    'Label': 'The fee name shown to applicants and staff.',
+    'Amount': 'The base fee amount in Indian rupees.',
+    'Late fee': 'Optional extra amount charged after the normal due date.',
+    'Due date': 'Optional deadline for this fee rule.',
+    'Refund policy': 'Plain-language information explaining whether and when this fee may be refunded.',
+    'Section title': 'The heading applicants see for this group of questions.',
+    'Short introduction': 'A sentence telling applicants what information belongs in this section.',
+    'Visibility': 'Active items appear in the application; inactive items remain stored but are hidden.',
+    'Internal section key': 'Stable system name used by corrections and saved applications. Avoid changing an existing key.',
+    'Internal key (optional)': 'A stable system name. Leave blank to create it automatically from the title.',
+    'Display order': 'Controls position within the form. Lower numbers appear first.',
+    'Form section': 'The section where this applicant question appears.',
+    'Question shown to applicants': 'The exact label applicants read above this answer control.',
+    'Answer type': 'Choose whether applicants enter text, a date, a number or select from choices.',
+    'Example answer / placeholder': 'Optional example shown inside an empty answer control.',
+    'Helpful instruction': 'Optional guidance displayed below the question.',
+    'Answer choices': 'For choice questions, enter one visible option per line.',
+    'Internal field key': 'Stable system name used by responses, exports and conditions. Avoid changing an existing key.',
+    'Internal field key (optional)': 'Leave blank to generate a stable key automatically from the question label.',
+    'Built-in data connection': 'Connects this definition to an existing profile or academic field. Existing values should normally remain unchanged.',
+    'Show only when (JSON)': 'Advanced condition that shows this question only when another answer matches.',
+    'Document type': 'The kind of evidence applicants must upload, such as photograph or marksheet.',
+    'Programme scope': 'All programmes applies this requirement everywhere; choose one programme to limit it.',
+    'Category scope': 'All categories applies this requirement to everyone; choose one category to limit it.',
+    'Stage': 'Application-stage documents are required before submission; admission-stage documents are collected later.',
+    'New name': 'Public name for the new draft created by duplication.',
+    'New code': 'Unique administrative code for the duplicated draft.',
+    'New slug': 'Unique public web-address ending for the duplicated draft.',
+    'Opening': 'Opening date and time for the duplicated cycle.',
+    'Closing': 'Closing date and time for the duplicated cycle.',
+    'Cycle identity, dates and applicant copy': 'Configure the public notice, application schedule and instructions applicants will read.',
+    'Choose programmes and intake defaults': 'Select available programmes and enter their basic marks, age and entrance requirements.',
+    'Basic entry requirements': 'These common thresholds are used by the detailed eligibility checks in the next step.',
+    'Divide seats and decide who is eligible': 'Make category seats equal approved intake, then define the checks applicants must pass.',
+    'Seat distribution': 'Divide approved intake among reservation categories and seat pools without exceeding the total.',
+    'Eligibility checks': 'Rules that compare saved applicant information with programme requirements.',
+    'Set application and admission fees': 'Configure the charges used by server-side fee assessment.',
+    'Fee rules': 'Base and category-specific application or admission charges for this programme.',
+    'Design the application form': 'Organise sections and questions, then verify them in the student-style preview.',
+    'Form sections': 'Groups of related questions shown together to applicants.',
+    'Applicant questions': 'Individual answer controls applicants complete inside form sections.',
+    'Student view and quick edit': 'A safe, disabled preview using the same visual components applicants see. Edit links return to the matching configuration.',
+    'Choose required documents': 'Select what evidence is collected, from whom and at which stage.',
+    'Review and publish the admission notice': 'Resolve readiness errors, preview the public notice and create an immutable published version.',
+  };
+  const ownText = (element) => [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent).join(' ').replace(/\s+/g, ' ').replace(/\s*\*\s*$/, '').trim();
+  const addOptionHelp = (heading) => {
+    if (!heading || one('.option-help', heading) || heading.querySelector(':scope > small')) return;
+    const label = ownText(heading);
+    if (!label) return;
+    const help = admissionOptionHelp[label] || `Use this setting to configure “${label}” for the admission cycle. Save the current form to apply changes.`;
+    const marker = document.createElement('span');
+    marker.className = 'option-help'; marker.tabIndex = 0; marker.setAttribute('role', 'button');
+    marker.setAttribute('aria-label', `Help for ${label}: ${help}`); marker.setAttribute('aria-expanded', 'false'); marker.dataset.help = help; marker.textContent = '?';
+    const toggleHelp = (open = !marker.classList.contains('is-open')) => { marker.classList.toggle('is-open', open); marker.setAttribute('aria-expanded', String(open)); };
+    marker.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); toggleHelp(); });
+    marker.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') toggleHelp(false);
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleHelp(); }
+    });
+    heading.classList.add('has-option-help'); heading.append(marker);
+  };
+  all('.admission-wizard label > span:not(.sr-only), .admission-wizard .workspace-section-heading h2, .admission-wizard .card-heading h2, .admission-wizard .builder-block-heading h3, .admission-wizard .designer-column-heading h3').forEach(addOptionHelp);
+  document.addEventListener('click', (event) => all('.option-help.is-open').forEach((marker) => { if (!marker.contains(event.target)) { marker.classList.remove('is-open'); marker.setAttribute('aria-expanded', 'false'); } }));
+  all('.admission-wizard details > summary').forEach((summary) => {
+    if (!summary.title) summary.title = `Open or close “${summary.textContent.replace(/\s+/g, ' ').trim()}”.`;
+  });
+  all('.admission-wizard button, .admission-wizard a.button').forEach((action) => {
+    if (action.title) return;
+    const text = action.textContent.replace(/\s+/g, ' ').trim();
+    const lower = text.toLowerCase();
+    let purpose = `Select “${text}”.`;
+    if (lower.includes('continue') || lower.includes('next')) purpose = `Move to the next setup step. Unsaved values in the current form are not saved unless this button also says Save.`;
+    else if (lower.startsWith('save') || lower.startsWith('update')) purpose = `Save the changes in this form to the admission cycle.`;
+    else if (lower.startsWith('add') || lower.startsWith('assign')) purpose = `Create this new configuration item in the current admission cycle.`;
+    else if (lower.includes('delete') || lower.includes('remove')) purpose = `Remove this unused draft item after confirmation.`;
+    else if (lower.includes('publish')) purpose = `Publish the validated admission notice and freeze a versioned configuration snapshot.`;
+    else if (lower.includes('preview')) purpose = `Open the applicant-facing public preview in a new tab.`;
+    action.title = purpose;
+  });
+
+  // The student-style preview links directly back to the matching section or question editor.
+  all('[data-open-editor]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      const editor = document.getElementById(link.dataset.openEditor || '');
+      if (!editor) return;
+      event.preventDefault();
+      if (editor instanceof HTMLDetailsElement) editor.open = true;
+      editor.classList.remove('editor-highlight'); void editor.offsetWidth; editor.classList.add('editor-highlight');
+      history.replaceState(history.state, '', `#${encodeURIComponent(editor.id)}`);
+      editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => one('input, select, textarea', editor)?.focus({ preventScroll: true }), 350);
+    });
   });
 
   // Applicant documents save immediately after a file is selected; the normal submit remains as a no-JavaScript fallback.

@@ -222,9 +222,9 @@ php scripts/migrate.php --dry-run
 php scripts/migrate.php --confirm=APPLY --backup-confirmed
 ```
 
-The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, `database/migrations/004_cms_page_builder.rollback.md`, and `database/migrations/005_application_reapply_attempts.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
+The apply command requires explicit confirmation that an encrypted, independently verified backup exists. It obtains a database advisory lock, enables maintenance mode, records checksums and execution metadata, verifies the resulting schema, and records a migration only after successful verification. MySQL/MariaDB DDL auto-commits, so failed upgrades must be inspected and rerun rather than treated as transactionally rolled back. Each migration includes rollback/forward-fix guidance; see `database/migrations/002_admission_management.rollback.md`, `database/migrations/003_submission_snapshot_revisions.rollback.md`, `database/migrations/004_cms_page_builder.rollback.md`, `database/migrations/005_application_reapply_attempts.rollback.md`, and `database/migrations/006_merit_selection_payments.rollback.md`. The complete admission release inventory and acceptance notes are in `docs/ADMISSIONS-ACCEPTANCE-REPORT.md`.
 
-## 8. Current database map (65 tables)
+## 8. Current database map (75 tables)
 
 ### Identity, access and configuration
 
@@ -273,11 +273,21 @@ These are shared masters. Admission-module work must reuse them rather than crea
 - `staff_notes`
 - `application_declarations`
 
+### Merit, selection and milestone delivery
+
+- `merit_cycle_settings` — cycle reservation, default quota and offer-window policy.
+- `merit_formula_versions` — immutable programme weight versions and tie order.
+- `merit_runs`, `merit_run_programs`, `merit_entries` — frozen generation, formula/component snapshots, list ranks and outcomes.
+- `selection_offers` — seat-allocation-linked payment deadlines and outcome timestamps.
+- `admission_notification_outbox` — retryable milestone email work; portal notification rows remain in `notifications`.
+
 ### Admission finance and student hand-off
 
 - `application_fee_assessments` — immutable per-application fee calculations.
 - `payments` — admission-stage manual payment proofs and verification, not a semester fee ledger.
 - `payment_refunds` — controlled refund decisions and processing history.
+- `payment_gateway_configs` — provider/mode plus encrypted write-only API and webhook secrets.
+- `payment_gateway_transactions`, `payment_gateway_events` — assessed online orders, verified outcomes and hashed callback/webhook evidence.
 - `seat_allocations` — transactional category/quota allocation history.
 - `student_enrollments` — student record created on admission while retaining the same `users` account.
 - `generated_documents` — metadata foundation for generated output.
@@ -372,7 +382,7 @@ The decisive identity rule is: **one person keeps one user account from applican
 
 - Controlled by `REQUIRE_STAFF_MFA`.
 - Fresh installations default to `false` to prevent locking out the first administrator before SMTP is configured.
-- MFA can run only with `MAIL_DRIVER=smtp`.
+- MFA can run only when the effective mail configuration uses SMTP. Admin Settings overrides the `.env` fallback after it is saved.
 - Codes are six digits, stored as password hashes, expire after ten minutes and allow five attempts.
 - Resend has a one-minute cooldown and invalidates prior active codes.
 - Failed delivery invalidates the challenge and returns safely to login.
@@ -444,14 +454,16 @@ Possible terminal/exception states: rejected, withdrawn
 6. application/admission document requirements;
 7. server-validated review, public preview and publication.
 
-Each step displays its own completion state. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
+Each step displays its own completion state. The branded command centre summarizes the application window, active programme and seat totals, configuration version, circular completion progress and currently selected step. The desktop step rail and mobile horizontal stepper distinguish ready, current and pending work. User-edited forms raise an accessible unsaved-change indicator and a native page-exit warning; normal server submission and no-JavaScript behavior remain unchanged. Draft cycle settings use **Save & continue** and remain on the current step after validation failure. The final step links back to every incomplete area, displays authoritative `AdmissionCycleService::readiness()` errors and warnings, and is the only place that offers the publish action. Publication still creates the immutable configuration snapshot; the wizard does not weaken lifecycle, permission, audit or versioning controls.
 
 The configuration editors deliberately translate internal structures into staff-facing language:
 
 - the seat editor explains category versus seat pool, displays the `programme intake = distributed seats` equation and calculates any shortage or excess in the browser while retaining server-side validation;
 - eligibility is presented as `applicant information + condition + required value`, while rule type, evaluation order and raw custom keys remain available under advanced settings;
-- the application-form designer separates sections from questions, groups questions by section, provides an active form map and hides stable keys, bindings and JSON conditions under advanced settings;
-- new section and question keys may be omitted by ordinary administrators and are then derived server-side from the title or label. Existing keys should remain stable once applications depend on them.
+- the application-form designer separates sections from questions, groups questions by section and provides a disabled student-style rendering made from the same section, field and preference UI components applicants receive; every preview section/question links directly to its editor;
+- built-in operational sections and bound questions allow safe copy/help customisation but keep their keys, type, binding, required state, position and visibility locked on both the client and server so the preview cannot promise behavior the applicant workflow does not support;
+- section titles, descriptions and built-in question labels/help are read from the same active configuration in the student application view, while new section and question keys may be omitted and derived server-side from the title or label;
+- each admission option heading receives a keyboard/touch-accessible `?` help marker; action buttons also expose purpose text through their native title.
 
 ### Staff application workflow
 
@@ -580,8 +592,12 @@ Release 1 stores retention settings and consent/audit evidence. It does not yet 
 
 `MailService` supports:
 
-- `MAIL_DRIVER=log` — records the message in `mail_logs` without external delivery;
+- `MAIL_DRIVER=log` — records non-sensitive messages in `mail_logs` without external delivery;
 - `MAIL_DRIVER=smtp` — sends synchronously through PHPMailer and records success/failure.
+
+Super administrators with `settings.edit` can configure the effective delivery method under **Admin Settings → Email & SMTP**. The editor supports host, port, STARTTLS/implicit TLS, optional SMTP authentication, username, encrypted password, sender identity and connection timeout. Saving creates private `settings` rows that override the `.env` fallback. The SMTP password is encrypted with AES-256-GCM through `App\Core\Encryption`; it is never rendered back to the browser, copied into old-input flash data, or included in audit events. Leaving the password field empty preserves the existing secret, and explicit removal remains server validated.
+
+**Save & send test email** persists the validated settings and exercises the same `MailService` route used by the application. Success or a safely redacted failure appears in the email delivery log. The test endpoint is authenticated, permission checked, CSRF protected and will not run while Local log mode is selected. TLS certificate verification cannot be disabled from the UI.
 
 Used for:
 
@@ -590,7 +606,7 @@ Used for:
 - staff MFA;
 - enquiry replies and workflow communication where configured.
 
-For Gmail, use a Google App Password or an approved Workspace relay. Never commit SMTP credentials.
+For Gmail, use a Google App Password or an approved Workspace relay. Never commit SMTP credentials. Environment values remain useful for automated deployment, but the production preflight evaluates the effective database-over-environment configuration.
 
 Database notifications are separate from email and appear in the applicant portal.
 
@@ -828,11 +844,13 @@ SESSION_SECURE=false
 MAIL_DRIVER=log
 MAIL_HOST=
 MAIL_PORT=587
+MAIL_AUTH=true
 MAIL_USERNAME=
 MAIL_PASSWORD=
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=admissions@example.edu.in
 MAIL_FROM_NAME="Netaji College of Pharmacy"
+MAIL_TIMEOUT=20
 REQUIRE_STAFF_MFA=false
 ```
 
@@ -861,18 +879,19 @@ Production must use HTTPS, `SESSION_SECURE=true`, working SMTP and a securely re
    composer install
    ```
 
-3. Start Apache and MySQL from XAMPP.
-4. Open:
+3. Install the guarded localhost-root launcher (the first run backs up XAMPP's existing entry files):
 
-   ```text
-   http://localhost/netaji-hub/public/install/
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\install-xampp-root.ps1 -Force
    ```
 
-5. Use a new/empty database.
-6. Leave demonstration data disabled for real institutional data.
-7. Keep the seeded 2027–28 cycle in Draft until all settings are reviewed.
+4. Start Apache and MySQL from XAMPP.
+5. Open `http://localhost/install/` for a new installation, or `http://localhost/` for an existing installation. Do not add `netaji-hub` or `public` to the URL.
+6. Use a new/empty database.
+7. Leave demonstration data disabled for real institutional data.
+8. Keep the seeded 2027–28 cycle in Draft until all settings are reviewed.
 
-Recommended local virtual host:
+Recommended production-style local virtual host:
 
 ```apache
 <VirtualHost *:80>
@@ -886,7 +905,7 @@ Recommended local virtual host:
 </VirtualHost>
 ```
 
-Never point the web root at the repository root. Only `public/` should be served.
+For production, prefer a virtual host whose document root is `public/`. The XAMPP localhost-root mode is intentionally supported for local deployment: its generated front controller exposes only `public/assets`, `public/install` and application routes, blocks direct access to the project folder, and keeps source/configuration/storage paths inaccessible.
 
 ## 25. Seeder behavior
 
@@ -1061,16 +1080,16 @@ If any answer is unclear, review this handbook, `docs/ARCHITECTURE.md`, `docs/XA
 
 ## 33. Current validated baseline
 
-The current validated Release 1 baseline, including the graphical admin workflow, rejected-application attempts, stepwise Save & next form and automatic revisioned uploads, is:
+The current validated Release 1 baseline includes the polished admission-cycle and application workspaces, rejected-application attempts, automatic revisioned uploads, encrypted SMTP settings, strict Verified gate, frozen programme merit generations, public/private results, ranked selection offers, gateway/manual payments and milestone notification outbox:
 
 ```text
-e162c64 Use published configuration for seeded admissions
+1ac39bc Enforce the verified-only merit source gate
 ```
 
-The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, reapplication ownership/open-cycle/lineage/reset checks, section progression, automatic upload revision history, and graphical-workflow RBAC/batch coverage:
+The authoritative CI run passed PHP 8.1–8.3 syntax/dependencies/CSS contracts plus clean and existing-install migration tests on MySQL 8.0 and MariaDB 10.4. It includes the complete HTTP/PDF suite, migration 006, RBAC/routes, strict merit gate, versioned deterministic ranking, capacity-checked selection, encrypted gateway configuration and signed PayU settlement regression coverage. Real provider sandbox reconciliation and a 2,000-record timed load test remain deployment acceptance items:
 
 ```text
-https://github.com/senditdebasish-maker/a/actions/runs/37051086121
+https://github.com/senditdebasish-maker/a/actions/runs/37148196733
 ```
 
 Future developers should keep CI green and extend acceptance coverage rather than weakening existing checks.
