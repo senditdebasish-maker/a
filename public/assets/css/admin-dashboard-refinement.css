@@ -1707,3 +1707,18 @@
     transition: none;
   }
 }
+
+/* Static admin preview: mirror the real Merit & selection workspace instead of
+   leaving the showcase sidebar with a dead/missing destination. */
+.merit-preview { margin-top: 2rem; scroll-margin-top: 5.5rem; }
+.merit-preview > .page-heading { margin-bottom: 1rem; }
+.merit-preview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+.merit-preview-grid article { display: flex; min-width: 0; flex-direction: column; gap: .35rem; padding: 1rem; background: #fff; }
+.merit-preview-grid span { color: var(--muted); font-size: .72rem; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.merit-preview-grid b { font: 700 1.05rem/1.2 var(--serif); }
+.merit-preview-grid small, .merit-preview-note { color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.merit-preview-note { margin: 1rem 0 0; }
+.merit-preview-aside { padding: 1.25rem; }
+.merit-preview-aside > span { color: var(--teal); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.merit-preview-aside h3 { margin: .3rem 0 .8rem; font: 700 1.25rem var(--serif); }
+@media (max-width: 760px) { .merit-preview-grid { grid-template-columns: 1fr; } }
