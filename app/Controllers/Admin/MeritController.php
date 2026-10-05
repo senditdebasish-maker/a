@@ -17,7 +17,7 @@ final class MeritController extends Controller
     public function index(): void
     {
         $db=Database::get();
-        $cycles=$db->all("SELECT * FROM admission_cycles ORDER BY academic_year DESC,id DESC");
+        $cycles=$db->all("SELECT * FROM admission_cycles ORDER BY starts_at DESC,id DESC");
         $cycleId=max(0,(int)($_GET['cycle']??($cycles[0]['id']??0)));
         $cycle=$cycleId?$db->fetch('SELECT * FROM admission_cycles WHERE id=:id',['id'=>$cycleId]):null;
         if(!$cycle&&$cycles){$cycle=$cycles[0];$cycleId=(int)$cycle['id'];}

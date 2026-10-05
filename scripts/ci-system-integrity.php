@@ -21,6 +21,7 @@ $required = [
     'app/Controllers/Admin/AdmissionController.php',
     'app/Controllers/Admin/ApplicationController.php',
     'app/Controllers/Admin/ReportController.php',
+    'app/Controllers/Admin/MeritController.php',
     'app/Controllers/ApplicantController.php',
     'app/Services/AdmissionCycleService.php',
     'app/Services/ApplicationWorkflowService.php',
@@ -33,6 +34,7 @@ $required = [
     'resources/views/admin/admissions/show.php',
     'resources/views/admin/applications/index.php',
     'resources/views/admin/applications/show.php',
+    'resources/views/admin/merit/index.php',
     'resources/views/student/application.php',
     'resources/views/student/dashboard.php',
 ];
@@ -57,6 +59,7 @@ $mustContainRoutes = [
     "POST', '/admin/admissions/{id}/publish'",
     "GET', '/admin/applications'",
     "GET', '/admin/reports'",
+    "GET', '/admin/merit'",
     "GET', '/student/dashboard'",
     "POST', '/student/application/submit'",
     "POST', '/student/application/document'",
@@ -80,6 +83,11 @@ foreach ([
     if (!str_contains($applicationController, $needle)) {
         throw new RuntimeException("Application review safety/workflow hook missing: {$needle}");
     }
+}
+
+$meritController = $text('app/Controllers/Admin/MeritController.php');
+if (!str_contains($meritController, 'ORDER BY starts_at DESC,id DESC') || str_contains($meritController, 'academic_year')) {
+    throw new RuntimeException('Merit workspace cycle ordering must use the admission_cycles starts_at column.');
 }
 
 $cycleService = $text('app/Services/AdmissionCycleService.php');
