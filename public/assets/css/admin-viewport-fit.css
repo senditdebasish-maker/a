@@ -1,0 +1,549 @@
+/*
+ * Admin viewport fit
+ * Loaded last in the administration shell. These rules keep every admin module
+ * inside the available canvas while preserving horizontal scrolling for data
+ * tables that cannot responsibly be compressed.
+ */
+
+.portal-page.admin-page {
+  --admin-page-gutter: clamp(16px, 2.7vw, 42px);
+}
+
+.portal-page.admin-page .portal-shell,
+.portal-page.admin-page .portal-content,
+.portal-page.admin-page .portal-topbar,
+.portal-page.admin-page .portal-main,
+.portal-page.admin-page .portal-main > * {
+  min-width: 0;
+}
+
+.portal-page.admin-page .portal-main {
+  width: 100%;
+  max-width: 1600px;
+  padding-inline: var(--admin-page-gutter);
+}
+
+.portal-page.admin-page .portal-main :where(
+  .card,
+  .panel,
+  .table-card,
+  .application-table-card,
+  .workflow-table-card,
+  .settings-panel,
+  .settings-section,
+  .report-card,
+  .record-section,
+  .form-section,
+  .cms-records,
+  .cms-generic-editor,
+  .role-editor,
+  .mail-fieldset,
+  .mail-list,
+  .course-seat-form,
+  .eligibility-course-card
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.portal-page.admin-page .portal-main :where(
+  .form-grid,
+  .settings-grid,
+  .smtp-settings-grid,
+  .mail-test-panel,
+  .workflow-filters,
+  .cms-grid,
+  .cms-editor,
+  .cms-module-layout,
+  .record-layout,
+  .report-grid,
+  .support-layout,
+  .support-admin-layout,
+  .enquiry-layout,
+  .settings-layout,
+  .access-summary,
+  .admin-dashboard-grid,
+  .admin-stat-grid,
+  .data-grid,
+  .permission-modules,
+  .section-field-grid,
+  .form-design-grid,
+  .eligibility-course-grid,
+  .programme-catalogue-grid,
+  .publication-review-grid
+) > * {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(h1, h2, h3, h4, p, small, b, strong, span, a, code, pre) {
+  overflow-wrap: anywhere;
+}
+
+.portal-page.admin-page :where(input, select, textarea, button) {
+  max-width: 100%;
+}
+
+.portal-page.admin-page :where(.page-heading, .admin-page-head, .record-header, .workflow-page-head) {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions, .form-actions, .wizard-panel-actions, .publish-decision-actions, .section-builder-actions, .cms-row-actions) {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions, .form-actions, .wizard-panel-actions, .publish-decision-actions, .section-builder-actions, .cms-row-actions) > * {
+  min-width: 0;
+}
+
+.portal-page.admin-page .card-heading,
+.portal-page.admin-page .section-title,
+.portal-page.admin-page .mail-section-title,
+.portal-page.admin-page .workspace-section-heading,
+.portal-page.admin-page .builder-block-heading,
+.portal-page.admin-page .designer-column-heading {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(.card-heading, .section-title, .mail-section-title, .workspace-section-heading, .builder-block-heading, .designer-column-heading) > * {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(.table-wrap, .table-responsive, .course-seat-table-wrap) {
+  width: 100%;
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.portal-page.admin-page :where(.table-wrap, .table-responsive, .course-seat-table-wrap)::after {
+  display: block;
+  clear: both;
+  content: "";
+}
+
+.portal-page.admin-page :where(.table-wrap, .table-responsive, .course-seat-table-wrap) table {
+  margin-bottom: 0;
+}
+
+.portal-page.admin-page :where(.table-wrap, .table-responsive, .course-seat-table-wrap) {
+  scrollbar-color: #9ab9b2 #edf4f2;
+  scrollbar-width: thin;
+}
+
+.portal-page.admin-page .filter-tabs,
+.portal-page.admin-page .record-tabs,
+.portal-page.admin-page .settings-nav,
+.portal-page.admin-page .admission-stepper,
+.portal-page.admin-page .application-lifecycle ol {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+}
+
+.portal-page.admin-page .admin-search {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.portal-page.admin-page .topbar-actions {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.portal-page.admin-page .alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.portal-page.admin-page .alert button {
+  flex: 0 0 auto;
+}
+
+.portal-page.admin-page :where(.editable-record, .inline-builder, .question-card, .section-builder, .mail-list > details) {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(.editable-record, .inline-builder, .question-card, .section-builder, .mail-list > details) > summary {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(.editable-record, .inline-builder, .question-card, .section-builder, .mail-list > details) > summary > * {
+  min-width: 0;
+}
+
+.portal-page.admin-page :where(pre, code) {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Mid-sized laptops: the sidebar becomes an overlay before the content becomes cramped. */
+@media (max-width: 1100px) {
+  .portal-page.admin-page .portal-shell {
+    display: block;
+  }
+
+  .portal-page.admin-page .portal-content {
+    grid-column: 1;
+    width: 100%;
+  }
+
+  .portal-page.admin-page .portal-sidebar {
+    width: min(320px, 86vw);
+    transform: translateX(-105%);
+    transition: transform .22s ease, box-shadow .22s ease;
+    box-shadow: none;
+  }
+
+  .portal-page.admin-page .portal-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 18px 0 50px rgba(5, 31, 37, .28);
+  }
+
+  .portal-page.admin-page.sidebar-open {
+    overflow: hidden;
+  }
+
+  .portal-page.admin-page.sidebar-open::after {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    background: rgba(5, 31, 37, .48);
+    content: "";
+  }
+
+  .portal-page.admin-page .sidebar-toggle {
+    display: grid;
+  }
+
+  .portal-page.admin-page .portal-topbar {
+    height: 68px;
+    padding-inline: 18px;
+    gap: 13px;
+  }
+
+  .portal-page.admin-page .admin-search {
+    display: none;
+  }
+
+  .portal-page.admin-page .view-site,
+  .portal-page.admin-page .topbar-date {
+    display: none;
+  }
+
+  .portal-page.admin-page .portal-main {
+    padding-block: 26px 42px;
+  }
+
+  .portal-page.admin-page :where(
+    .admin-dashboard-grid,
+    .admin-dashboard-grid.lower,
+    .record-layout,
+    .cms-module-layout,
+    .cms-editor,
+    .support-layout,
+    .support-admin-layout,
+    .enquiry-layout,
+    .settings-layout,
+    .access-summary,
+    .report-grid,
+    .form-design-grid,
+    .mail-delivery-choice
+  ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-page.admin-page :where(.record-aside, .cms-editor > aside) {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-page.admin-page .workflow-page-head,
+  .portal-page.admin-page .page-heading.admin-heading {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .portal-page.admin-page {
+    --admin-page-gutter: 16px;
+  }
+
+  .portal-page.admin-page .portal-main {
+    padding-block: 20px 34px;
+  }
+
+  .portal-page.admin-page .page-heading,
+  .portal-page.admin-page .admin-page-head,
+  .portal-page.admin-page .record-header,
+  .portal-page.admin-page .workflow-page-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .portal-page.admin-page .page-heading h1,
+  .portal-page.admin-page .admin-page-head h1 {
+    font-size: clamp(1.72rem, 8vw, 2.12rem);
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions) {
+    width: 100%;
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions) > :where(a, button, form) {
+    flex: 1 1 180px;
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions) > form .button,
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions) > form button {
+    width: 100%;
+  }
+
+  .portal-page.admin-page .card-heading,
+  .portal-page.admin-page .section-title,
+  .portal-page.admin-page .mail-section-title,
+  .portal-page.admin-page .workspace-section-heading,
+  .portal-page.admin-page .builder-block-heading,
+  .portal-page.admin-page .designer-column-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .portal-page.admin-page .card-heading > :last-child,
+  .portal-page.admin-page .section-title > :last-child,
+  .portal-page.admin-page .workspace-section-heading > :last-child {
+    max-width: 100%;
+  }
+
+  .portal-page.admin-page :where(
+    .admin-stat-grid,
+    .workflow-metrics,
+    .cms-overview,
+    .backup-summary,
+    .data-grid,
+    .permission-modules,
+    .mail-security-grid,
+    .seat-planning-summary,
+    .eligibility-course-grid,
+    .publication-review-grid
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-page.admin-page :where(
+    .form-grid.three,
+    .smtp-settings-grid,
+    .mail-test-panel,
+    .mail-delivery-choice,
+    .eligibility-question-grid,
+    .programme-catalogue-grid,
+    .designer-stats
+  ) {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-page.admin-page :where(.form-grid .full, .form-grid label.full, .form-grid .span-2, .smtp-settings-grid .span-2, .smtp-settings-grid .full) {
+    grid-column: auto;
+  }
+
+  .portal-page.admin-page :where(.table-filters, .workflow-filters, .mail-test-actions, .course-seat-form-footer) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .portal-page.admin-page .table-filters > :where(select, input, a, button),
+  .portal-page.admin-page .course-seat-form-footer .button {
+    width: 100%;
+  }
+
+  .portal-page.admin-page .record-aside,
+  .portal-page.admin-page .cms-editor > aside {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-page.admin-page .settings-nav,
+  .portal-page.admin-page .record-tabs,
+  .portal-page.admin-page .filter-tabs {
+    margin-inline: calc(var(--admin-page-gutter) * -1);
+    padding-inline: var(--admin-page-gutter);
+  }
+
+  .portal-page.admin-page .settings-nav a,
+  .portal-page.admin-page .record-tabs a,
+  .portal-page.admin-page .filter-tabs a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .portal-page.admin-page :where(.admin-doc-list article, .ticket-list article, .enquiry-list > a, .cms-list > a, .mail-list summary) {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 540px) {
+  .portal-page.admin-page {
+    --admin-page-gutter: 12px;
+  }
+
+  .portal-page.admin-page .portal-topbar {
+    height: 62px;
+    padding-inline: 12px;
+  }
+
+  .portal-page.admin-page .topbar-actions {
+    gap: 7px;
+  }
+
+  .portal-page.admin-page .user-menu > span:last-child {
+    display: none;
+  }
+
+  .portal-page.admin-page .logout-button,
+  .portal-page.admin-page .sidebar-toggle,
+  .portal-page.admin-page .user-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .portal-page.admin-page .portal-main {
+    padding-block: 16px 28px;
+  }
+
+  .portal-page.admin-page .page-heading {
+    margin-bottom: 18px;
+  }
+
+  .portal-page.admin-page :where(
+    .admin-stat-grid,
+    .workflow-metrics,
+    .cms-overview,
+    .backup-summary,
+    .data-grid,
+    .permission-modules,
+    .mail-security-grid,
+    .seat-planning-summary,
+    .eligibility-course-grid,
+    .publication-review-grid,
+    .record-meta,
+    .security-checks
+  ) {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-page.admin-page :where(
+    .card:not(.wizard-panel),
+    .panel,
+    .report-card,
+    .record-section,
+    .settings-section,
+    .cms-grid > section,
+    .cms-records,
+    .cms-generic-editor,
+    .role-editor,
+    .support-layout > section,
+    .mail-fieldset
+  ) {
+    padding-inline: 15px;
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions, .form-actions, .wizard-panel-actions, .publish-decision-actions, .section-builder-actions, .cms-row-actions) {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions, .form-actions, .wizard-panel-actions, .publish-decision-actions, .section-builder-actions, .cms-row-actions) > :where(a, button, form, .button) {
+    width: 100%;
+  }
+
+  .portal-page.admin-page :where(.heading-actions, .page-actions, .record-actions, .form-actions, .wizard-panel-actions, .publish-decision-actions, .section-builder-actions, .cms-row-actions) form > :where(button, .button) {
+    width: 100%;
+  }
+
+  .portal-page.admin-page .alert {
+    padding: 11px 12px;
+  }
+
+  .portal-page.admin-page :where(.report-bar, .funnel-visual > div) {
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 7px;
+  }
+
+  .portal-page.admin-page :where(.report-bar, .funnel-visual > div) > span {
+    grid-column: 1 / -1;
+  }
+
+  .portal-page.admin-page .queue-item,
+  .portal-page.admin-page .attention-card > a,
+  .portal-page.admin-page .admin-doc-list article,
+  .portal-page.admin-page .admin-payment,
+  .portal-page.admin-page .setting-records article {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .portal-page.admin-page .queue-item > :first-child,
+  .portal-page.admin-page .attention-card > a > :first-child,
+  .portal-page.admin-page .admin-doc-list article > :first-child {
+    display: none;
+  }
+
+  .portal-page.admin-page .admin-payment > form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .portal-page.admin-page .mail-list summary {
+    grid-template-columns: 18px minmax(0, 1fr) 18px;
+    padding-inline: 13px;
+  }
+
+  .portal-page.admin-page .mail-list summary > time,
+  .portal-page.admin-page .mail-list summary > small {
+    display: none;
+  }
+
+  .portal-page.admin-page .mail-preview {
+    margin-inline: 0;
+    padding: 14px;
+  }
+
+  .portal-page.admin-page .course-seat-table-wrap {
+    margin-inline: -1px;
+  }
+
+  .portal-page.admin-page .course-seat-table {
+    min-width: 940px;
+  }
+}
+
+@media (max-width: 380px) {
+  .portal-page.admin-page {
+    --admin-page-gutter: 10px;
+  }
+
+  .portal-page.admin-page .portal-sidebar {
+    width: min(300px, 92vw);
+  }
+
+  .portal-page.admin-page .page-heading h1,
+  .portal-page.admin-page .admin-page-head h1 {
+    font-size: 1.65rem;
+  }
+
+  .portal-page.admin-page .card-heading h2,
+  .portal-page.admin-page .workspace-section-heading h2 {
+    font-size: 1.28rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-page.admin-page .portal-sidebar {
+    transition: none;
+  }
+}
