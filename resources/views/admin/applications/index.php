@@ -1,5 +1,5 @@
 <?php
-$view=$viewMode??'board';
+$view=$viewMode??'table';
 $visibleCount=count($applications);
 $canDecide=can('applications.decide');
 $canBulk=can('applications.assign')||$canDecide;
@@ -120,7 +120,29 @@ $recommended=static function(array $application):string{
             <?php endforeach ?>
         </section>
     <?php else:?>
-        <section class="panel table-card workflow-table-card"><div class="table-responsive"><table class="data-table application-workflow-table"><thead><tr><?php if($canBulk):?><th><span class="sr-only">Select</span></th><?php endif ?><th>Application</th><th>Applicant</th><th>Programme</th><th>Readiness</th><th>Owner</th><th>Status</th><th>Age</th><th>Action</th></tr></thead><tbody><?php foreach($applications as $application):[$readyText,$readyTone]=$readiness($application);$age=(int)($application['age_hours']??0);?><tr><?php if($canBulk):?><td><label class="card-selector"><input type="checkbox" name="application_ids[]" value="<?= (int)$application['id'] ?>" data-application-select><span class="sr-only">Select <?= e($application['application_number']?:'Draft · attempt '.(int)($application['attempt_no']??1)) ?></span></label></td><?php endif ?><td><strong><?= e($application['application_number']?:'Draft · attempt '.(int)($application['attempt_no']??1)) ?></strong><small><?= e($application['cycle_name']) ?></small></td><td><?= e($application['applicant_name']) ?><small><?= e($application['email']) ?></small></td><td><?= e($application['first_preference_name']??'Not selected') ?></td><td><span class="signal signal-<?= e($readyTone) ?>"><?= e($readyText) ?></span></td><td><?= e($application['reviewer_name']?:'Unassigned') ?></td><td><span class="status-badge status-<?= e($application['status']) ?>"><?= e($statusLabels[$application['status']]??ucwords(str_replace('_',' ',$application['status']))) ?></span></td><td><span class="age-chip <?= $age>=72?'is-late':'' ?>"><?= $age<1?'New':($age<24?$age.'h':(int)floor($age/24).'d') ?></span></td><td><a class="button button-outline button-sm" href="<?= url('admin/applications/'.$application['id']) ?>">Review</a></td></tr><?php endforeach ?></tbody></table></div></section>
+        <section class="panel table-card workflow-table-card" aria-labelledby="application-table-title">
+            <header class="workflow-table-heading">
+                <div><span class="eyebrow">Application register</span><h2 id="application-table-title">Applications requiring review</h2><p>Open a record for the full audit trail, documents, eligibility checks and decisions.</p></div>
+                <span class="workflow-table-count"><b><?= $visibleCount ?></b> shown</span>
+            </header>
+            <div class="table-responsive" tabindex="0" aria-label="Scrollable applications table">
+                <table class="data-table application-workflow-table">
+                    <thead><tr><?php if($canBulk):?><th scope="col"><span class="sr-only">Select</span></th><?php endif ?><th scope="col">Application</th><th scope="col">Applicant</th><th scope="col">Programme</th><th scope="col">Readiness</th><th scope="col">Payment</th><th scope="col">Owner</th><th scope="col">Status</th><th scope="col">Submitted</th><th scope="col"><span class="sr-only">Open application</span></th></tr></thead>
+                    <tbody><?php foreach($applications as $application):[$readyText,$readyTone]=$readiness($application);$submittedAt=$application['submitted_at']?:$application['created_at'];$paymentStatus=(string)($application['payment_status']??'');$paymentText=$paymentStatus!==''?ucwords(str_replace('_',' ',$paymentStatus)):'Not started';$paymentTone=$paymentStatus==='verified'?'success':($paymentStatus==='rejected'?'warning':'neutral');?><tr>
+                        <?php if($canBulk):?><td class="table-select" data-label="Select"><label class="card-selector"><input type="checkbox" name="application_ids[]" value="<?= (int)$application['id'] ?>" data-application-select><span class="sr-only">Select <?= e($application['application_number']?:'Draft · attempt '.(int)($application['attempt_no']??1)) ?></span></label></td><?php endif ?>
+                        <td data-label="Application"><strong><?= e($application['application_number']?:'Draft · attempt '.(int)($application['attempt_no']??1)) ?></strong><small><?= e($application['cycle_name']) ?></small></td>
+                        <td data-label="Applicant"><div class="workflow-applicant"><span aria-hidden="true"><?= e(strtoupper(substr((string)$application['applicant_name'],0,1))) ?></span><div><b><?= e($application['applicant_name']) ?></b><small><?= e($application['email']) ?></small><small><?= e($application['mobile']?:'Mobile not provided') ?></small></div></div></td>
+                        <td data-label="Programme"><span class="table-primary-value"><?= e($application['first_preference_name']??'Not selected') ?></span></td>
+                        <td data-label="Readiness"><span class="signal signal-<?= e($readyTone) ?>"><?= e($readyText) ?></span></td>
+                        <td data-label="Payment"><span class="signal signal-<?= e($paymentTone) ?>"><?= e($paymentText) ?></span></td>
+                        <td data-label="Owner"><span class="table-primary-value"><?= e($application['reviewer_name']?:'Unassigned') ?></span></td>
+                        <td data-label="Status"><span class="status-badge status-<?= e($application['status']) ?>"><?= e($statusLabels[$application['status']]??ucwords(str_replace('_',' ',$application['status']))) ?></span></td>
+                        <td data-label="Submitted"><time datetime="<?= e((string)$submittedAt) ?>"><span class="table-primary-value"><?= format_date($submittedAt) ?></span></time></td>
+                        <td class="table-row-action" data-label="Review"><a class="button button-outline button-sm" href="<?= url('admin/applications/'.$application['id']) ?>">Open<span class="sr-only"> <?= e($application['application_number']?:'application for '.$application['applicant_name']) ?></span></a></td>
+                    </tr><?php endforeach ?></tbody>
+                </table>
+            </div>
+        </section>
     <?php endif ?>
 </form>
 

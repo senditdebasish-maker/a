@@ -1,0 +1,401 @@
+/*
+ * Admission dashboard refinements
+ * Loaded after the inherited portal styles so controls and the application
+ * register remain stable at desktop, tablet and phone widths.
+ */
+
+.portal-page .admin-main .form-grid > label,
+.portal-page .admin-main .workflow-filters .field,
+.portal-page .admin-main .settings-inline-form label,
+.portal-page .admin-main .inline-builder label,
+.portal-page .admin-main .editable-record label,
+.portal-page .admin-main .setting-edit-grid label,
+.portal-page .admin-main .smtp-settings-grid label {
+  min-width: 0;
+}
+
+.portal-page .admin-main .form-grid :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea),
+.portal-page .admin-main .settings-inline-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea),
+.portal-page .admin-main .inline-builder :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea),
+.portal-page .admin-main .editable-record :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea),
+.portal-page .admin-main .workflow-filters :is(input, select),
+.portal-page .admin-main .bulk-workflow-actions :is(input, select) {
+  width: 100%;
+  max-width: none;
+  border-color: #bfd4cf;
+  border-radius: 9px;
+  background-color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75), 0 1px 2px rgba(16,50,58,.025);
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+.portal-page .admin-main .form-grid :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select),
+.portal-page .admin-main .settings-inline-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select),
+.portal-page .admin-main .inline-builder :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select),
+.portal-page .admin-main .editable-record :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select),
+.portal-page .admin-main .workflow-filters :is(input, select),
+.portal-page .admin-main .bulk-workflow-actions :is(input, select) {
+  min-height: 46px;
+}
+
+.portal-page .admin-main .form-grid textarea,
+.portal-page .admin-main .settings-inline-form textarea,
+.portal-page .admin-main .inline-builder textarea,
+.portal-page .admin-main .editable-record textarea {
+  min-height: 118px;
+}
+
+.portal-page .admin-main .form-grid :is(input, select, textarea):hover:not(:disabled),
+.portal-page .admin-main .settings-inline-form :is(input, select, textarea):hover:not(:disabled),
+.portal-page .admin-main .inline-builder :is(input, select, textarea):hover:not(:disabled),
+.portal-page .admin-main .editable-record :is(input, select, textarea):hover:not(:disabled),
+.portal-page .admin-main .workflow-filters :is(input, select):hover:not(:disabled),
+.portal-page .admin-main .bulk-workflow-actions :is(input, select):hover:not(:disabled) {
+  border-color: #7fb2a8;
+}
+
+.portal-page .admin-main .form-grid :is(input, select, textarea):focus,
+.portal-page .admin-main .settings-inline-form :is(input, select, textarea):focus,
+.portal-page .admin-main .inline-builder :is(input, select, textarea):focus,
+.portal-page .admin-main .editable-record :is(input, select, textarea):focus,
+.portal-page .admin-main .workflow-filters :is(input, select):focus,
+.portal-page .admin-main .bulk-workflow-actions :is(input, select):focus {
+  outline: 0;
+  border-color: #087376;
+  background-color: #fcfffe;
+  box-shadow: 0 0 0 4px rgba(7,94,97,.12);
+}
+
+.portal-page .admin-main .workflow-filter-panel {
+  padding: 20px;
+  border-color: #cfdfdb;
+  background: linear-gradient(135deg, #fbfdfc, #fff 58%, #f6fbf9);
+  box-shadow: 0 9px 26px rgba(11,57,60,.045);
+}
+
+.portal-page .admin-main .workflow-filters {
+  grid-template-columns: minmax(250px, 1.7fr) repeat(4, minmax(155px, 1fr));
+  gap: 14px;
+}
+
+.portal-page .admin-main .workflow-filters .field:first-of-type {
+  grid-column: span 2;
+}
+
+.portal-page .admin-main .workflow-filter-actions {
+  min-width: max-content;
+}
+
+/* Clear, information-rich default application register. */
+.portal-page .workflow-table-card {
+  margin-top: 16px;
+  border-color: #cfdfdb;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(10,53,57,.055);
+}
+
+.portal-page .workflow-table-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px 18px;
+  border-bottom: 1px solid #dce7e4;
+  background: linear-gradient(120deg, #f2faf7, #fff 62%, #fff9ed);
+}
+
+.portal-page .workflow-table-heading h2 {
+  margin: 4px 0 5px;
+  color: var(--navy);
+  font: 700 1.45rem/1.15 var(--serif);
+}
+
+.portal-page .workflow-table-heading p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.portal-page .workflow-table-count {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+  gap: 5px;
+  padding: 8px 11px;
+  border: 1px solid #c9ded8;
+  border-radius: 999px;
+  background: #fff;
+  color: #58706c;
+  font-size: .74rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.portal-page .workflow-table-count b {
+  color: var(--teal);
+  font-size: 1rem;
+}
+
+.portal-page .workflow-table-card .table-responsive {
+  scrollbar-color: #91b8af #edf4f2;
+}
+
+.portal-page .application-workflow-table {
+  min-width: 1240px;
+}
+
+.portal-page .application-workflow-table thead th {
+  padding: 13px 14px;
+  border-bottom: 1px solid #dbe7e4;
+  background: #f8fbfa;
+  color: #5d7772;
+  font-size: .7rem !important;
+  letter-spacing: .07em;
+}
+
+.portal-page .application-workflow-table tbody tr {
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+
+.portal-page .application-workflow-table tbody tr:hover {
+  background: #f5fbf9;
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.portal-page .application-workflow-table td {
+  padding: 15px 14px;
+  border-bottom-color: #e3ece9;
+}
+
+.portal-page .application-workflow-table td:first-child:not(.table-select) {
+  min-width: 162px;
+}
+
+.portal-page .application-workflow-table td > strong,
+.portal-page .application-workflow-table .table-primary-value {
+  color: #284844;
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.portal-page .application-workflow-table td > small {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-page .workflow-applicant {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 210px;
+}
+
+.portal-page .workflow-applicant > span {
+  display: grid;
+  width: 37px;
+  height: 37px;
+  flex: 0 0 37px;
+  place-items: center;
+  border: 1px solid #c8e0da;
+  border-radius: 50%;
+  background: #e7f4f1;
+  color: var(--teal);
+  font: 800 .9rem var(--serif);
+}
+
+.portal-page .workflow-applicant > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.portal-page .workflow-applicant b {
+  overflow: hidden;
+  color: var(--navy);
+  font-size: .86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-page .workflow-applicant small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .72rem !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-page .application-workflow-table .signal,
+.portal-page .application-workflow-table .status-badge {
+  max-width: 158px;
+  justify-content: center;
+}
+
+.portal-page .application-workflow-table .table-row-action {
+  min-width: 82px;
+  text-align: right;
+}
+
+.portal-page .application-workflow-table .table-row-action .button {
+  min-width: 68px;
+}
+
+@media (max-width: 1280px) {
+  .portal-page .admin-main .workflow-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .portal-page .admin-main .workflow-filter-panel {
+    padding: 17px;
+  }
+
+  .portal-page .admin-main .workflow-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-page .workflow-table-heading {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .portal-page .admin-main .workflow-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-page .admin-main .workflow-filters .field:first-of-type {
+    grid-column: auto;
+  }
+
+  .portal-page .admin-main .workflow-filter-actions {
+    min-width: 0;
+  }
+
+  .portal-page .workflow-table-heading {
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .portal-page .workflow-table-count {
+    align-self: flex-start;
+  }
+
+  .portal-page .workflow-table-card .table-responsive {
+    overflow: visible;
+  }
+
+  .portal-page .application-workflow-table,
+  .portal-page .application-workflow-table tbody,
+  .portal-page .application-workflow-table tr,
+  .portal-page .application-workflow-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .portal-page .application-workflow-table thead {
+    display: none;
+  }
+
+  .portal-page .application-workflow-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    background: #f3f8f6;
+  }
+
+  .portal-page .application-workflow-table tbody tr {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #d4e3df;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(11,57,60,.045);
+  }
+
+  .portal-page .application-workflow-table tbody tr:hover {
+    box-shadow: 0 6px 18px rgba(11,57,60,.08), inset 3px 0 0 var(--teal);
+  }
+
+  .portal-page .application-workflow-table td {
+    display: grid;
+    grid-template-columns: minmax(92px, .68fr) minmax(0, 1.32fr);
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border-bottom: 1px solid #e5edeb;
+    text-align: left;
+  }
+
+  .portal-page .application-workflow-table td::before {
+    color: #6a807c;
+    content: attr(data-label);
+    font-size: .68rem;
+    font-weight: 850;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .portal-page .application-workflow-table td.table-select {
+    position: absolute;
+    top: 13px;
+    right: 13px;
+    z-index: 2;
+    display: block;
+    width: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .portal-page .application-workflow-table td.table-select::before {
+    display: none;
+  }
+
+  .portal-page .application-workflow-table td.table-row-action {
+    padding: 13px 14px;
+    border: 0;
+    text-align: left;
+  }
+
+  .portal-page .application-workflow-table td.table-row-action .button {
+    width: 100%;
+  }
+
+  .portal-page .application-workflow-table td > small,
+  .portal-page .workflow-applicant small {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .portal-page .workflow-applicant {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 430px) {
+  .portal-page .workflow-table-heading h2 {
+    font-size: 1.28rem;
+  }
+
+  .portal-page .application-workflow-table td {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .portal-page .application-workflow-table td.table-select {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-page .application-workflow-table tbody tr,
+  .portal-page .admin-main .form-grid :is(input, select, textarea),
+  .portal-page .admin-main .workflow-filters :is(input, select) {
+    transition: none;
+  }
+}

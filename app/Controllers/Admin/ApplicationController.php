@@ -43,7 +43,7 @@ final class ApplicationController extends Controller
         if (Auth::hasRole('reviewer')&&!Auth::hasRole(['super-admin','admission-officer','principal'])) { $where[]='a.assigned_to=:reviewer_scope'; $params['reviewer_scope']=Auth::id(); }
         $from=" FROM applications a JOIN users u ON u.id=a.user_id JOIN admission_cycles ac ON ac.id=a.admission_cycle_id LEFT JOIN applicant_profiles ap ON ap.user_id=a.user_id LEFT JOIN users reviewer ON reviewer.id=a.assigned_to LEFT JOIN cycle_programs selected_cp ON selected_cp.id=a.selected_cycle_program_id LEFT JOIN programs selected_program ON selected_program.id=selected_cp.program_id WHERE ".implode(' AND ',$where);
         $total=(int)$db->scalar('SELECT COUNT(DISTINCT a.id)'.$from,$params);
-        $viewMode=in_array($_GET['view']??'', ['board','table'], true)?(string)$_GET['view']:'board';
+        $viewMode=in_array($_GET['view']??'', ['board','table'], true)?(string)$_GET['view']:'table';
         $perPage=$viewMode==='board'?300:25; $pages=max(1,(int)ceil($total/$perPage)); $page=max(1,min($pages,(int)($_GET['page']??1))); $offset=($page-1)*$perPage;
         $applications=$db->all("SELECT a.*,CONCAT(u.first_name,' ',u.last_name) AS applicant_name,u.email,u.mobile,ap.category,ac.name AS cycle_name,selected_program.name AS selected_program_name,CONCAT(reviewer.first_name,' ',reviewer.last_name) AS reviewer_name,
             (SELECT pay.status FROM payments pay WHERE pay.application_id=a.id ORDER BY pay.id DESC LIMIT 1) AS payment_status,
