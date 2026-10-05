@@ -845,3 +845,360 @@
     transition: none;
   }
 }
+
+/* Admission cycle Step 2: catalogue-only, multi-programme selection. */
+.portal-page .admission-wizard .programme-selection-panel {
+  overflow: visible;
+}
+
+.portal-page .admission-wizard .programme-selection-note {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  margin: 0 0 16px;
+  padding: 13px 15px;
+  border: 1px solid #d7e8e3;
+  border-radius: 12px;
+  background: linear-gradient(115deg, #f1faf7, #fbfdfc);
+  color: #365750;
+}
+
+.portal-page .admission-wizard .programme-selection-note > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 9px;
+  background: #0c6c68;
+  color: #fff;
+  font: 800 .78rem/1 var(--sans);
+}
+
+.portal-page .admission-wizard .programme-selection-note p {
+  margin: 1px 0 0;
+  font-size: .79rem;
+  line-height: 1.55;
+}
+
+.portal-page .admission-wizard .programme-selection-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 18px;
+  align-items: center;
+  margin-bottom: 19px;
+  padding: 15px 17px;
+  border: 1px solid #d8e5e2;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(14, 65, 65, .045);
+}
+
+.portal-page .admission-wizard .programme-selection-summary > span {
+  color: #54716b;
+  font-size: .69rem;
+  font-weight: 850;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.portal-page .admission-wizard .programme-selection-summary strong {
+  grid-row: span 2;
+  grid-column: 2;
+  min-width: 48px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: #e4f2ed;
+  color: #087267;
+  font: 800 1.5rem/1 var(--serif);
+  text-align: center;
+}
+
+.portal-page .admission-wizard .programme-selection-summary small {
+  color: #7b8b87;
+  font-size: .72rem;
+}
+
+.portal-page .admission-wizard .programme-catalogue-picker {
+  overflow: hidden;
+  border: 1px solid #d8e5e2;
+  border-radius: 15px;
+  background: #f8fbfa;
+}
+
+.portal-page .admission-wizard .programme-catalogue-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #dde9e6;
+  background: #fff;
+}
+
+.portal-page .admission-wizard .programme-catalogue-toolbar > span {
+  flex: 0 0 auto;
+  color: #5e7771;
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
+.portal-page .admission-wizard .programme-catalogue-toolbar > span b {
+  display: inline-grid;
+  min-width: 22px;
+  place-items: center;
+  margin-right: 3px;
+  color: #0a7068;
+  font-size: .9rem;
+}
+
+.portal-page .admission-wizard .programme-catalogue-search {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  width: min(410px, 100%);
+  min-width: 0;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #cfded9;
+  border-radius: 10px;
+  background: #fafdfc;
+  color: #52736b;
+}
+
+.portal-page .admission-wizard .programme-catalogue-search > span {
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
+.portal-page .admission-wizard .programme-catalogue-search input {
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: .78rem;
+}
+
+.portal-page .admission-wizard .programme-catalogue-search:focus-within {
+  border-color: #29877b;
+  box-shadow: 0 0 0 3px rgba(20, 125, 113, .13);
+}
+
+.portal-page .admission-wizard .programme-catalogue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 13px;
+}
+
+.portal-page .admission-wizard .programme-catalogue-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 92px;
+  padding: 13px;
+  border: 1px solid #d7e4e0;
+  border-radius: 12px;
+  background: #fff;
+  color: #243f3d;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease, transform .16s ease;
+}
+
+.portal-page .admission-wizard .programme-catalogue-option:hover {
+  border-color: #94bdb4;
+  box-shadow: 0 8px 17px rgba(18, 74, 70, .07);
+  transform: translateY(-1px);
+}
+
+.portal-page .admission-wizard .programme-catalogue-option.is-selected {
+  border-color: #64a99b;
+  background: linear-gradient(135deg, #effaf6, #fff);
+  box-shadow: inset 3px 0 0 #0a7b70, 0 7px 16px rgba(13, 101, 91, .07);
+}
+
+.portal-page .admission-wizard .programme-catalogue-option > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.portal-page .admission-wizard .programme-catalogue-option:focus-within {
+  border-color: #167c72;
+  box-shadow: 0 0 0 3px rgba(23, 123, 113, .16), inset 3px 0 0 #0a7b70;
+}
+
+.portal-page .admission-wizard .programme-catalogue-check {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 1.5px solid #b5c9c3;
+  border-radius: 7px;
+  background: #fff;
+  color: transparent;
+  font-size: .76rem;
+  font-weight: 900;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.portal-page .admission-wizard .programme-catalogue-option.is-selected .programme-catalogue-check,
+.portal-page .admission-wizard .programme-catalogue-option > input:checked + .programme-catalogue-check {
+  border-color: #078174;
+  background: #078174;
+  color: #fff;
+}
+
+.portal-page .admission-wizard .programme-catalogue-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.portal-page .admission-wizard .programme-catalogue-copy b {
+  overflow: hidden;
+  color: #183f3e;
+  font-size: .82rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-page .admission-wizard .programme-catalogue-copy small,
+.portal-page .admission-wizard .programme-catalogue-copy em {
+  overflow: hidden;
+  color: #607a74;
+  font-size: .66rem;
+  font-style: normal;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-page .admission-wizard .programme-catalogue-copy em {
+  color: #84938f;
+}
+
+.portal-page .admission-wizard .programme-catalogue-state {
+  align-self: start;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #f0f4f3;
+  color: #70827d;
+  font-size: .6rem;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: .025em;
+  white-space: nowrap;
+}
+
+.portal-page .admission-wizard .programme-catalogue-option.is-selected .programme-catalogue-state {
+  background: #dff2ea;
+  color: #137263;
+}
+
+.portal-page .admission-wizard .programme-catalogue-grid.is-read-only {
+  padding: 0;
+}
+
+.portal-page .admission-wizard .programme-catalogue-grid.is-read-only .programme-catalogue-option {
+  cursor: default;
+}
+
+.portal-page .admission-wizard .programme-catalogue-grid.is-read-only .programme-catalogue-option:hover {
+  transform: none;
+}
+
+.portal-page .admission-wizard .programme-selection-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  border-top: 1px solid #dce8e5;
+  background: #fff;
+}
+
+.portal-page .admission-wizard .programme-selection-save > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.portal-page .admission-wizard .programme-selection-save b {
+  color: #294c48;
+  font-size: .78rem;
+}
+
+.portal-page .admission-wizard .programme-selection-save small {
+  color: #71827e;
+  font-size: .67rem;
+  line-height: 1.4;
+}
+
+.portal-page .admission-wizard .programme-selection-save .button {
+  flex: 0 0 auto;
+  min-height: 42px;
+}
+
+@media (max-width: 850px) {
+  .portal-page .admission-wizard .programme-catalogue-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 580px) {
+  .portal-page .admission-wizard .programme-selection-note {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 9px;
+    padding: 12px;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-toolbar,
+  .portal-page .admission-wizard .programme-selection-save {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-search {
+    width: 100%;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-toolbar > span {
+    text-align: right;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-grid {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-option {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 84px;
+    padding: 11px;
+  }
+
+  .portal-page .admission-wizard .programme-catalogue-state {
+    display: none;
+  }
+
+  .portal-page .admission-wizard .programme-selection-save .button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-page .admission-wizard .programme-catalogue-option {
+    transition: none;
+  }
+}

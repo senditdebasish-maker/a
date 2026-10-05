@@ -72,7 +72,12 @@ final class AdmissionController extends Controller
         $programs=$db->all("SELECT cp.*,p.name,p.code,p.status AS program_status,(SELECT COALESCE(SUM(sm.seats),0) FROM seat_matrix sm WHERE sm.cycle_program_id=cp.id) AS matrix_total,(SELECT COUNT(*) FROM applications a JOIN application_preferences pref ON pref.application_id=a.id WHERE pref.cycle_program_id=cp.id) AS applicants FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id WHERE cp.admission_cycle_id=:cycle ORDER BY p.sort_order,p.name",['cycle'=>(int)$id]);
         foreach($programs as &$program){ $program['seats']=$db->all('SELECT * FROM seat_matrix WHERE cycle_program_id=:id ORDER BY category,quota',['id'=>$program['id']]); $program['eligibility']=$db->all('SELECT * FROM eligibility_rules WHERE cycle_program_id=:id ORDER BY sort_order,id',['id'=>$program['id']]); $program['fees']=$db->all('SELECT * FROM admission_fee_rules WHERE cycle_program_id=:id ORDER BY fee_type,category_code,id',['id'=>$program['id']]); } unset($program);
         $sessions=$db->all('SELECT * FROM academic_sessions ORDER BY starts_on DESC');
-        $availablePrograms=$db->all("SELECT * FROM programs WHERE status='active' AND id NOT IN (SELECT program_id FROM cycle_programs WHERE admission_cycle_id=:cycle) ORDER BY name",['cycle'=>(int)$id]);
+        $catalogPrograms=$db->all("SELECT p.*,d.name AS department_name,cp.id AS cycle_program_id,cp.status AS cycle_program_status
+            FROM programs p
+            LEFT JOIN departments d ON d.id=p.department_id
+            LEFT JOIN cycle_programs cp ON cp.program_id=p.id AND cp.admission_cycle_id=:cycle
+            WHERE p.status='active'
+            ORDER BY p.sort_order,p.name",['cycle'=>(int)$id]);
         $sections=$db->all('SELECT * FROM admission_form_sections WHERE admission_cycle_id=:cycle ORDER BY sort_order,id',['cycle'=>(int)$id]);
         $fields=$db->all('SELECT * FROM admission_form_fields WHERE admission_cycle_id=:cycle ORDER BY section_id,sort_order,id',['cycle'=>(int)$id]);
         $requirements=$db->all("SELECT cdr.*,dt.name,dt.code,p.name AS program_name FROM cycle_document_requirements cdr JOIN document_types dt ON dt.id=cdr.document_type_id LEFT JOIN programs p ON p.id=cdr.program_id WHERE cdr.admission_cycle_id=:cycle ORDER BY cdr.sort_order,cdr.id",['cycle'=>(int)$id]);
@@ -80,7 +85,7 @@ final class AdmissionController extends Controller
         $categories=$db->all("SELECT * FROM admission_categories WHERE status='active' ORDER BY sort_order,name");
         $versions=$db->all("SELECT acv.*,CONCAT(u.first_name,' ',u.last_name) AS creator_name FROM admission_configuration_versions acv LEFT JOIN users u ON u.id=acv.created_by WHERE acv.admission_cycle_id=:cycle ORDER BY version_no DESC",['cycle'=>(int)$id]);
         $stats=['applications'=>(int)$db->scalar('SELECT COUNT(*) FROM applications WHERE admission_cycle_id=:cycle',['cycle'=>(int)$id]),'submitted'=>(int)$db->scalar("SELECT COUNT(*) FROM applications WHERE admission_cycle_id=:cycle AND status<>'draft'",['cycle'=>(int)$id]),'admitted'=>(int)$db->scalar("SELECT COUNT(*) FROM applications WHERE admission_cycle_id=:cycle AND status='admitted'",['cycle'=>(int)$id])];
-        $this->view('admin/admissions/show',compact('cycle','readiness','programs','sessions','availablePrograms','sections','fields','requirements','documentTypes','categories','versions','stats')+['title'=>$cycle['name']],'admin');
+        $this->view('admin/admissions/show',compact('cycle','readiness','programs','catalogPrograms','sessions','sections','fields','requirements','documentTypes','categories','versions','stats')+['title'=>$cycle['name']],'admin');
     }
 
     public function preview(string $id): void
@@ -137,44 +142,66 @@ final class AdmissionController extends Controller
         catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); $this->redirect('admin/admissions/'.$id); }
     }
 
-    public function addProgram(string $id): never
+    public function syncPrograms(string $id): never
     {
         try {
-            $cycle=$this->draftCycle((int)$id); $programId=(int)($_POST['program_id']??0); $capacity=(int)($_POST['seat_capacity']??0);
-            if($capacity<1) throw new RuntimeException('Seat capacity must be positive.');
-            $db=Database::get(); $program=$db->fetch("SELECT id FROM programs WHERE id=:id AND status='active'",['id'=>$programId]); if(!$program) throw new RuntimeException('Select an active programme.');
-            $cpId=$db->transaction(function(Database $db) use($cycle,$programId,$capacity): int {
-                $cp=$db->insert('cycle_programs',['admission_cycle_id'=>$cycle['id'],'program_id'=>$programId,'seat_capacity'=>$capacity,'application_fee'=>(float)($_POST['application_fee']??0),'admission_fee'=>(float)($_POST['admission_fee']??0),'minimum_marks_general'=>($_POST['minimum_marks_general']??'')!==''?(float)$_POST['minimum_marks_general']:null,'minimum_marks_reserved'=>($_POST['minimum_marks_reserved']??'')!==''?(float)$_POST['minimum_marks_reserved']:null,'min_age'=>($_POST['min_age']??'')!==''?(int)$_POST['min_age']:null,'max_age'=>($_POST['max_age']??'')!==''?(int)$_POST['max_age']:null,'accepted_entrance_exams'=>trim((string)($_POST['accepted_entrance_exams']??'')),'status'=>'active','created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
-                $db->insert('seat_matrix',['cycle_program_id'=>$cp,'category'=>'General','quota'=>'state','seats'=>$capacity,'filled_seats'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
-                foreach([['application_fee','Application fee',(float)($_POST['application_fee']??0)],['admission_fee','Admission fee',(float)($_POST['admission_fee']??0)]] as [$type,$label,$amount]) $db->insert('admission_fee_rules',['cycle_program_id'=>$cp,'category_code'=>null,'fee_type'=>$type,'label'=>$label,'amount'=>$amount,'currency'=>'INR','due_at'=>null,'late_fee_amount'=>0,'refund_policy'=>null,'status'=>'active','created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
-                return $cp;
+            $cycle=$this->draftCycle((int)$id);
+            $submitted=$_POST['program_ids']??[];
+            if(!is_array($submitted))$submitted=[$submitted];
+            $selected=[];
+            foreach($submitted as $programId){
+                $programId=filter_var($programId,FILTER_VALIDATE_INT);
+                if($programId!==false&&(int)$programId>0)$selected[(int)$programId]=(int)$programId;
+            }
+            $selectedIds=array_values($selected);
+            $db=Database::get();
+            $catalogueIds=array_map('intval',array_column($db->all("SELECT id FROM programs WHERE status='active'"),'id'));
+            $invalid=array_diff($selectedIds,$catalogueIds);
+            if($invalid)throw new RuntimeException('One or more selected programmes are no longer active in the programme catalogue. Refresh the page and choose again.');
+
+            $existing=$db->all('SELECT id,program_id,status FROM cycle_programs WHERE admission_cycle_id=:cycle',['cycle'=>$cycle['id']]);
+            $existingByProgram=[];
+            foreach($existing as $row)$existingByProgram[(int)$row['program_id']]=$row;
+            $removeProgramIds=array_values(array_diff(array_keys($existingByProgram),$selectedIds));
+            $addProgramIds=array_values(array_diff($selectedIds,array_keys($existingByProgram)));
+            $now=date('Y-m-d H:i:s');
+
+            $db->transaction(function(Database $db)use($cycle,$existingByProgram,$removeProgramIds,$addProgramIds,$now):void{
+                foreach($removeProgramIds as $programId){
+                    $cycleProgram=$existingByProgram[$programId];
+                    $hasPreferences=(int)$db->scalar('SELECT COUNT(*) FROM application_preferences WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0;
+                    $hasFeeAssessments=(int)$db->scalar('SELECT COUNT(*) FROM application_fee_assessments WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0;
+                    $hasAllocation=(int)$db->scalar('SELECT COUNT(*) FROM seat_allocations WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0;
+                    $hasMeritData=(int)$db->scalar('SELECT COUNT(*) FROM merit_formula_versions WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0
+                        ||(int)$db->scalar('SELECT COUNT(*) FROM merit_run_programs WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0
+                        ||(int)$db->scalar('SELECT COUNT(*) FROM merit_list_entries WHERE cycle_program_id=:program',['program'=>$cycleProgram['id']])>0;
+                    if($hasPreferences||$hasFeeAssessments||$hasAllocation||$hasMeritData)throw new RuntimeException('A programme with applicant, payment, allocation or merit records cannot be removed from this cycle.');
+                    $db->query('DELETE FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND program_id=:program',['cycle'=>$cycle['id'],'program'=>$programId]);
+                    $db->query('DELETE FROM cycle_programs WHERE id=:id',['id'=>$cycleProgram['id']]);
+                }
+                foreach($addProgramIds as $programId){
+                    $cycleProgramId=$db->insert('cycle_programs',[
+                        'admission_cycle_id'=>$cycle['id'],'program_id'=>$programId,'seat_capacity'=>0,
+                        'application_fee'=>0,'admission_fee'=>0,'minimum_marks_general'=>null,'minimum_marks_reserved'=>null,
+                        'min_age'=>null,'max_age'=>null,'accepted_entrance_exams'=>null,'status'=>'active',
+                        'created_at'=>$now,'updated_at'=>$now,
+                    ]);
+                    $db->insert('seat_matrix',[
+                        'cycle_program_id'=>$cycleProgramId,'category'=>'General','quota'=>'state','seats'=>0,'filled_seats'=>0,
+                        'created_at'=>$now,'updated_at'=>$now,
+                    ]);
+                }
+                foreach($existingByProgram as $programId=>$cycleProgram){
+                    if(!in_array($programId,$removeProgramIds,true))$db->update('cycle_programs',['status'=>'active','updated_at'=>$now],'id=:id',['id'=>$cycleProgram['id']]);
+                }
             });
-            AuditService::log('cycle_program_added','cycle_program',$cpId,[],['cycle_id'=>$cycle['id'],'program_id'=>$programId]); Flash::set('success','Programme added with default fee and seat rows.');
-        } catch(\Throwable $exception){ Flash::set('warning',$exception instanceof RuntimeException?$exception->getMessage():'Programme is already assigned to this cycle.'); }
-        $this->redirect('admin/admissions/'.$id.'#programmes');
-    }
-
-    public function saveProgram(string $id, string $programId): never
-    {
-        try {
-            $cycle=$this->draftCycle((int)$id);$db=Database::get();$program=$db->fetch('SELECT * FROM cycle_programs WHERE id=:program AND admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]);
-            if(!$program)throw new RuntimeException('Cycle programme not found.');
-            $general=($_POST['minimum_marks_general']??'')!==''?(float)$_POST['minimum_marks_general']:null;$reserved=($_POST['minimum_marks_reserved']??'')!==''?(float)$_POST['minimum_marks_reserved']:null;
-            if(($general!==null&&($general<0||$general>100))||($reserved!==null&&($reserved<0||$reserved>100)))throw new RuntimeException('Minimum marks must be between 0 and 100.');
-            $minAge=($_POST['min_age']??'')!==''?(int)$_POST['min_age']:null;$maxAge=($_POST['max_age']??'')!==''?(int)$_POST['max_age']:null;if($minAge!==null&&$maxAge!==null&&$maxAge<$minAge)throw new RuntimeException('Maximum age cannot be below minimum age.');
-            $data=['minimum_marks_general'=>$general,'minimum_marks_reserved'=>$reserved,'min_age'=>$minAge,'max_age'=>$maxAge,'accepted_entrance_exams'=>trim((string)($_POST['accepted_entrance_exams']??''))?:null,'status'=>in_array(($_POST['status']??'active'),['active','inactive'],true)?($_POST['status']??'active'):'active','updated_at'=>date('Y-m-d H:i:s')];
-            $db->update('cycle_programs',$data,'id=:id',['id'=>$program['id']]);AuditService::log('cycle_program_updated','cycle_program',$program['id'],$program,$data);Flash::set('success','Programme eligibility defaults and availability saved.');
-        }catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}
-        $this->redirect('admin/admissions/'.$id.'#programme-'.$programId);
-    }
-
-    public function deleteProgram(string $id, string $programId): never
-    {
-        try{
-            $cycle=$this->draftCycle((int)$id);$db=Database::get();$program=$db->fetch('SELECT cp.*,p.name FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id WHERE cp.id=:program AND cp.admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$program)throw new RuntimeException('Cycle programme not found.');
-            if((int)$db->scalar('SELECT COUNT(*) FROM application_preferences WHERE cycle_program_id=:program',['program'=>$program['id']])>0)throw new RuntimeException('This programme already has application preferences and cannot be removed.');
-            $db->transaction(function(Database $db)use($program,$cycle):void{$db->query('DELETE FROM cycle_document_requirements WHERE admission_cycle_id=:cycle AND program_id=:program',['cycle'=>$cycle['id'],'program'=>$program['program_id']]);$db->query('DELETE FROM cycle_programs WHERE id=:id',['id'=>$program['id']]);});AuditService::log('cycle_program_removed','cycle_program',$program['id'],$program,[]);Flash::set('success','Programme and its draft rules, seats and fees were removed from the cycle.');
-        }catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}
+            AuditService::log('cycle_programmes_synchronised','admission_cycle',$cycle['id'],[],[
+                'selected_program_ids'=>$selectedIds,'added_program_ids'=>$addProgramIds,'removed_program_ids'=>$removeProgramIds,
+            ]);
+            Flash::set('success',count($selectedIds).' programme'.(count($selectedIds)===1?' is':'s are').' now included in this admission cycle. Configure seats, eligibility and fees in the next steps.');
+        }catch(RuntimeException $exception){
+            Flash::set('warning',$exception->getMessage());
+        }
         $this->redirect('admin/admissions/'.$id.'#programmes');
     }
 

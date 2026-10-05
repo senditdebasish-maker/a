@@ -633,6 +633,33 @@
     });
   }
 
+  // Admission cycle programme picker: make multi-selection and catalogue search immediately clear.
+  const programmeCataloguePicker = one('[data-programme-catalogue-picker]');
+  if (programmeCataloguePicker) {
+    const choices = all('[data-programme-catalogue-choice]', programmeCataloguePicker);
+    const options = all('[data-programme-catalogue-option]', programmeCataloguePicker);
+    const counts = all('[data-programme-selection-count]');
+    const search = one('[data-programme-catalogue-search]', programmeCataloguePicker);
+    const updateProgrammeSelection = () => {
+      const count = choices.filter((choice) => choice.checked).length;
+      counts.forEach((counter) => { counter.textContent = String(count); });
+      options.forEach((option) => {
+        const choice = one('[data-programme-catalogue-choice]', option);
+        const state = one('.programme-catalogue-state', option);
+        option.classList.toggle('is-selected', Boolean(choice?.checked));
+        if (state) state.textContent = choice?.checked ? 'Included' : 'Add to cycle';
+      });
+    };
+    choices.forEach((choice) => choice.addEventListener('change', updateProgrammeSelection));
+    search?.addEventListener('input', () => {
+      const term = search.value.trim().toLowerCase();
+      options.forEach((option) => {
+        option.hidden = term !== '' && !(option.dataset.programmeSearchText || '').includes(term);
+      });
+    });
+    updateProgrammeSelection();
+  }
+
   all('[data-print]').forEach((button) => button.addEventListener('click', () => window.print()));
 
   const header = one('[data-header]');
