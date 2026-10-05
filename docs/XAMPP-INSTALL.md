@@ -32,7 +32,7 @@
    - Database: `netaji_pharmacy`
    - Username: `root`
    - Password: blank on an unchanged local XAMPP installation
-7. Create a strong Super Admin account. Leave **demonstration data** unchecked for a real installation.
+7. Create a strong Super Admin account. In **Email delivery**, keep **Local email log** for a safe local trial or select **SMTP with PHPMailer** and enter the institution’s provider/app-password details. Leave **demonstration data** unchecked for a real installation.
 8. The 2027–28 cycle starts in **Draft**. Review every rule before changing it to Open.
 
 If you prefer to make the project itself the htdocs root, copy the **contents** of the repository (not its containing folder) directly into `C:\xampp\htdocs`. The included root `index.php` and `.htaccess` provide the same clean URLs while protecting source/configuration directories. Back up or move the original XAMPP dashboard files first, then run the same PowerShell command from `C:\xampp\htdocs`; it detects that the project is already at the root and only normalises an existing `.env` to `APP_URL=http://localhost`.
@@ -55,12 +55,16 @@ Point Apache directly at `public/`, not the project root:
 
 Add `127.0.0.1 pharmacy.local` to the Windows hosts file, restart Apache, and update `APP_URL=http://pharmacy.local` in `.env`.
 
-## Local email and MFA
+## Local email, SMTP and MFA
 
-The installer uses `MAIL_DRIVER=log` and `REQUIRE_STAFF_MFA=false` to prevent a local setup lockout. Verification messages are written to **Admin → Email log**. Before production:
+The installer keeps **Local email log** selected by default and writes `REQUIRE_STAFF_MFA=false`, so a local setup cannot lock its first administrator out. Messages in log mode appear in **Admin → Email log** and are not sent.
+
+If Composer dependencies are installed, the installer also offers **SMTP with PHPMailer**. It validates the selected host, port, encryption, sender and (when enabled) credentials before installing, but it does **not** send a message during database creation. SMTP credentials are never redisplayed or included in the email log; the first-run values are written only to the protected `.env` file. Restrict OS/project-folder access to that file.
+
+Before production:
 
 1. Sign in as a super administrator and open **Settings → Email & SMTP**.
-2. Enter the provider details and use **Save & send test email**. The SMTP password is encrypted and is never displayed again.
+2. Use **Save & send test email**. When credentials are saved from Admin Settings, the password is encrypted in the database and is never displayed again.
 3. Test verification, password reset and staff OTP delivery.
 4. Change `REQUIRE_STAFF_MFA=true` only after delivery succeeds.
 5. Use HTTPS and change `SESSION_SECURE=true`.

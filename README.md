@@ -39,7 +39,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Printable/Dompdf-ready application summary, cover sheet, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
 - Protected local storage, MIME/size checks, random paths, SHA-256 file checksums and permission-checked streaming.
 - Configurable Aadhaar stage, AES-256-GCM field encryption, masking, consent/audit/retention foundation.
-- Browser installer that creates a clean database, roles, permissions, B.Pharm, a versioned scheduled 2027–28 admission cycle, CMS content and optional demonstration records.
+- Browser installer that creates a clean database, roles, permissions, B.Pharm, a versioned scheduled 2027–28 admission cycle, CMS content, optional PHPMailer/SMTP delivery and optional demonstration records.
 - Admin-triggered and lock-protected scheduled encrypted backup archives containing SQL + protected files, with configurable retention.
 - Production preflight, guarded restore and scheduled-backup commands plus launch checklists.
 
@@ -72,7 +72,7 @@ Then start Apache/MySQL and open:
 http://localhost/install/
 ```
 
-The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
+The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, offers safe local-mail logging or optional PHPMailer SMTP setup, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
 
 ## Demonstration accounts
 
