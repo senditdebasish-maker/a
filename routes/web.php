@@ -103,7 +103,8 @@ $router->post('/admin/admissions/{id}/close', [AdmissionController::class, 'clos
 $router->post('/admin/admissions/{id}/archive', [AdmissionController::class, 'archive'], ['auth', 'permission:admissions.manage']);
 $router->post('/admin/admissions/{id}/duplicate', [AdmissionController::class, 'duplicate'], ['auth', 'permission:admissions.duplicate']);
 $router->post('/admin/admissions/{id}/programs/sync', [AdmissionController::class, 'syncPrograms'], ['auth', 'permission:admissions.manage']);
-$router->post('/admin/admissions/{id}/seats/sync', [AdmissionController::class, 'syncSeats'], ['auth', 'permission:admission_seats.manage']);
+$router->post('/admin/admissions/{id}/programs/{programId}/seats', [AdmissionController::class, 'saveSeats'], ['auth', 'permission:admission_seats.manage']);
+$router->post('/admin/admissions/{id}/programs/{programId}/seats/{seatId}/delete', [AdmissionController::class, 'deleteSeat'], ['auth', 'permission:admission_seats.manage']);
 $router->post('/admin/admissions/{id}/programs/{programId}/eligibility', [AdmissionController::class, 'saveEligibility'], ['auth', 'permission:admissions.manage']);
 $router->post('/admin/admissions/{id}/programs/{programId}/eligibility/{ruleId}/delete', [AdmissionController::class, 'deleteEligibility'], ['auth', 'permission:admissions.manage']);
 $router->post('/admin/admissions/{id}/programs/{programId}/fees', [AdmissionController::class, 'saveFee'], ['auth', 'permission:admission_fees.manage']);

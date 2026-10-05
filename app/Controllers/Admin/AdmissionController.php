@@ -205,58 +205,29 @@ final class AdmissionController extends Controller
         $this->redirect('admin/admissions/'.$id.'#programmes');
     }
 
-    public function syncSeats(string $id): never
+    public function saveSeats(string $id, string $programId): never
     {
         try {
-            $cycle=$this->draftCycle((int)$id);
-            $db=Database::get();
-            $categories=$db->all("SELECT code FROM admission_categories WHERE status='active' ORDER BY sort_order,name");
-            $categoryCodes=array_values(array_unique(array_map(static fn(array $category):string=>(string)$category['code'],$categories)));
-            if(!$categoryCodes)throw new RuntimeException('Add at least one active admission category before setting the seat matrix.');
-            $programs=$db->all("SELECT cp.id,cp.seat_capacity,p.name FROM cycle_programs cp JOIN programs p ON p.id=cp.program_id WHERE cp.admission_cycle_id=:cycle AND cp.status='active' AND p.status='active' ORDER BY p.sort_order,p.name",['cycle'=>$cycle['id']]);
-            if(!$programs)throw new RuntimeException('Select at least one active programme before setting seats.');
-            $capacities=$_POST['capacities']??[];
-            $submittedSeats=$_POST['seats']??[];
-            if(!is_array($capacities)||!is_array($submittedSeats))throw new RuntimeException('The course-wise seat table could not be read. Refresh the page and try again.');
-
-            $db->transaction(function(Database $db)use($cycle,$programs,$categoryCodes,$capacities,$submittedSeats):void{
-                $now=date('Y-m-d H:i:s');
-                foreach($programs as $program){
-                    $programId=(int)$program['id'];
-                    $capacity=filter_var($capacities[$programId]??null,FILTER_VALIDATE_INT);
-                    if($capacity===false||$capacity===null||(int)$capacity<1)throw new RuntimeException('Enter a positive approved intake for every programme.');
-                    $seatValues=$submittedSeats[$programId]??null;
-                    if(!is_array($seatValues))throw new RuntimeException('Enter reservation seats for every programme row.');
-                    $cycleProgram=$db->fetch('SELECT id FROM cycle_programs WHERE id=:id AND admission_cycle_id=:cycle FOR UPDATE',['id'=>$programId,'cycle'=>$cycle['id']]);
-                    if(!$cycleProgram)throw new RuntimeException('A programme in the seat table is no longer available. Refresh the page and try again.');
-                    $rows=$db->all('SELECT * FROM seat_matrix WHERE cycle_program_id=:program FOR UPDATE',['program'=>$programId]);
-                    $stateRows=[];
-                    $fixedSeats=0;
-                    foreach($rows as $row){
-                        if($row['quota']==='state'&&in_array($row['category'],$categoryCodes,true))$stateRows[$row['category']]=$row;
-                        else $fixedSeats+=(int)$row['seats'];
-                    }
-                    $total=$fixedSeats;
-                    foreach($categoryCodes as $categoryCode){
-                        $seats=filter_var($seatValues[$categoryCode]??null,FILTER_VALIDATE_INT);
-                        if($seats===false||$seats===null||(int)$seats<0)throw new RuntimeException('Reservation seats must be whole numbers of zero or more.');
-                        $seats=(int)$seats;
-                        $current=$stateRows[$categoryCode]??null;
-                        if($current&&(int)$current['filled_seats']>$seats)throw new RuntimeException('Seats for '.$categoryCode.' cannot be below its existing allocations.');
-                        $total+=$seats;
-                        if($current)$db->update('seat_matrix',['seats'=>$seats,'updated_at'=>$now],'id=:id',['id'=>$current['id']]);
-                        elseif($seats>0)$db->insert('seat_matrix',['cycle_program_id'=>$programId,'category'=>$categoryCode,'quota'=>'state','seats'=>$seats,'filled_seats'=>0,'created_at'=>$now,'updated_at'=>$now]);
-                    }
-                    if($total!==(int)$capacity)throw new RuntimeException('The reservation rows for '.$program['name'].' must add up to its approved intake.');
-                    $db->update('cycle_programs',['seat_capacity'=>(int)$capacity,'updated_at'=>$now],'id=:id',['id'=>$programId]);
-                }
+            $cycle=$this->draftCycle((int)$id); $db=Database::get(); $cp=$db->fetch('SELECT * FROM cycle_programs WHERE id=:program AND admission_cycle_id=:cycle',['program'=>(int)$programId,'cycle'=>$cycle['id']]); if(!$cp) throw new RuntimeException('Cycle programme not found.');
+            $rows=(array)($_POST['seats']??[]); if(!$rows) throw new RuntimeException('Seat rows are required.');$capacity=(int)($_POST['seat_capacity']??$cp['seat_capacity']);if($capacity<1)throw new RuntimeException('Programme capacity must be positive.');
+            $db->transaction(function(Database $db) use($rows,$cp,$capacity): void {
+                $total=0; $updates=[];
+                foreach($rows as $seatId=>$value){ $seat=$db->fetch('SELECT * FROM seat_matrix WHERE id=:id AND cycle_program_id=:program FOR UPDATE',['id'=>(int)$seatId,'program'=>$cp['id']]); if(!$seat) throw new RuntimeException('Invalid seat matrix row.'); $value=(int)$value; if($value<(int)$seat['filled_seats']) throw new RuntimeException('Seats cannot be below active allocations.'); $total+=$value; $updates[]=[$seat,$value]; }
+                $newCategory=trim((string)($_POST['new_category']??'')); $newQuota=trim((string)($_POST['new_quota']??'state'))?:'state'; $newSeats=(int)($_POST['new_seats']??0);
+                if($newCategory!==''&&$newSeats>0){ if(!(int)$db->scalar("SELECT COUNT(*) FROM admission_categories WHERE code=:code AND status='active'",['code'=>$newCategory])) throw new RuntimeException('Select a valid category for the new seat row.'); if($db->fetch('SELECT id FROM seat_matrix WHERE cycle_program_id=:program AND category=:category AND quota=:quota',['program'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota])) throw new RuntimeException('That category and quota row already exists.'); $total+=$newSeats; }
+                if($total!==$capacity) throw new RuntimeException('The seats divided between categories must equal the approved programme intake. Review the live total and try again.');
+                foreach($updates as [$seat,$value]) $db->update('seat_matrix',['seats'=>$value,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$seat['id']]);
+                if($newCategory!==''&&$newSeats>0) $db->insert('seat_matrix',['cycle_program_id'=>$cp['id'],'category'=>$newCategory,'quota'=>$newQuota,'seats'=>$newSeats,'filled_seats'=>0,'created_at'=>date('Y-m-d H:i:s'),'updated_at'=>date('Y-m-d H:i:s')]);
+                $db->update('cycle_programs',['seat_capacity'=>$capacity,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>$cp['id']]);
             });
-            AuditService::log('cycle_seat_matrix_synchronised','admission_cycle',$cycle['id'],[],['programme_count'=>count($programs),'categories'=>$categoryCodes]);
-            Flash::set('success','Course-wise seat matrix saved. Each programme now balances to its approved intake.');
-        }catch(RuntimeException $exception){
-            Flash::set('warning',$exception->getMessage());
-        }
+            AuditService::log('seat_matrix_updated','cycle_program',$cp['id'],[],['seat_total'=>$capacity]); Flash::set('success','Seat matrix saved.');
+        } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
         $this->redirect('admin/admissions/'.$id.'#rules');
+    }
+
+    public function deleteSeat(string $id,string $programId,string $seatId): never
+    {
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$seat=$db->fetch('SELECT sm.* FROM seat_matrix sm JOIN cycle_programs cp ON cp.id=sm.cycle_program_id WHERE sm.id=:seat AND sm.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['seat'=>(int)$seatId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$seat)throw new RuntimeException('Seat row not found.');if((int)$seat['filled_seats']>0)throw new RuntimeException('A seat row with active allocations cannot be removed.');$remaining=(int)$db->scalar('SELECT COALESCE(SUM(seats),0) FROM seat_matrix WHERE cycle_program_id=:program AND id<>:seat',['program'=>(int)$programId,'seat'=>(int)$seatId]);if($remaining<1)throw new RuntimeException('A programme must retain at least one positive seat row.');$db->transaction(function(Database $db)use($seat,$programId,$remaining):void{$db->query('DELETE FROM seat_matrix WHERE id=:id',['id'=>$seat['id']]);$db->update('cycle_programs',['seat_capacity'=>$remaining,'updated_at'=>date('Y-m-d H:i:s')],'id=:id',['id'=>(int)$programId]);});AuditService::log('seat_matrix_row_removed','seat_matrix',$seat['id'],$seat,[]);Flash::set('success','Seat row removed and programme capacity recalculated.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function saveEligibility(string $id, string $programId): never
@@ -269,12 +240,12 @@ final class AdmissionController extends Controller
             $ruleId=(int)($_POST['rule_id']??0); if($ruleId){ if(!(int)$db->scalar('SELECT COUNT(*) FROM eligibility_rules WHERE id=:id AND cycle_program_id=:program',['id'=>$ruleId,'program'=>$cp['id']])) throw new RuntimeException('Eligibility rule not found.'); $db->update('eligibility_rules',$data,'id=:id',['id'=>$ruleId]); } else $ruleId=$db->insert('eligibility_rules',$data+['created_at'=>date('Y-m-d H:i:s')]);
             AuditService::log('eligibility_rule_saved','eligibility_rule',$ruleId,[],$data); Flash::set('success','Eligibility rule saved.');
         } catch(RuntimeException $exception){ Flash::set('warning',$exception->getMessage()); }
-        $this->redirect('admin/admissions/'.$id.'#eligibility');
+        $this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function deleteEligibility(string $id,string $programId,string $ruleId): never
     {
-        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$rule=$db->fetch('SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id=er.cycle_program_id WHERE er.id=:rule AND er.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['rule'=>(int)$ruleId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$rule)throw new RuntimeException('Eligibility rule not found.');$db->query('DELETE FROM eligibility_rules WHERE id=:id',['id'=>$rule['id']]);AuditService::log('eligibility_rule_removed','eligibility_rule',$rule['id'],$rule,[]);Flash::set('success','Eligibility rule removed. Publication readiness will require another rule if none remain.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#eligibility');
+        try{$cycle=$this->draftCycle((int)$id);$db=Database::get();$rule=$db->fetch('SELECT er.* FROM eligibility_rules er JOIN cycle_programs cp ON cp.id=er.cycle_program_id WHERE er.id=:rule AND er.cycle_program_id=:program AND cp.admission_cycle_id=:cycle',['rule'=>(int)$ruleId,'program'=>(int)$programId,'cycle'=>$cycle['id']]);if(!$rule)throw new RuntimeException('Eligibility rule not found.');$db->query('DELETE FROM eligibility_rules WHERE id=:id',['id'=>$rule['id']]);AuditService::log('eligibility_rule_removed','eligibility_rule',$rule['id'],$rule,[]);Flash::set('success','Eligibility rule removed. Publication readiness will require another rule if none remain.');}catch(RuntimeException $exception){Flash::set('warning',$exception->getMessage());}$this->redirect('admin/admissions/'.$id.'#rules');
     }
 
     public function saveSection(string $id): never
