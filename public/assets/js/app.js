@@ -275,31 +275,112 @@
     });
   }
 
-  // Admission setup: show the seat arithmetic before the administrator submits it.
-  all('[data-seat-matrix]').forEach((form) => {
-    const capacity = one('[data-seat-capacity]', form);
-    const seatInputs = all('[data-seat-count]', form);
-    const balance = one('[data-seat-balance]', form);
-    if (!capacity || !balance || !seatInputs.length) return;
-    const updateSeatBalance = () => {
-      const approved = Math.max(0, Number.parseInt(capacity.value || '0', 10) || 0);
-      const assigned = seatInputs.reduce((total, input) => total + Math.max(0, Number.parseInt(input.value || '0', 10) || 0), 0);
-      const difference = approved - assigned;
-      balance.classList.remove('is-balanced', 'is-short', 'is-over');
-      if (difference === 0) {
-        balance.classList.add('is-balanced');
-        balance.querySelector('b').textContent = `Ready to save — ${assigned} of ${approved} seats assigned.`;
-      } else if (difference > 0) {
-        balance.classList.add('is-short');
-        balance.querySelector('b').textContent = `Assign ${difference} more seat${difference === 1 ? '' : 's'} before saving.`;
-      } else {
-        balance.classList.add('is-over');
-        balance.querySelector('b').textContent = `Remove ${Math.abs(difference)} seat${difference === -1 ? '' : 's'} before saving.`;
+  // Course-wise reservation table: calculate each programme row and the admission-wide total live.
+  const courseSeatTable = one('[data-course-seat-table]');
+  if (courseSeatTable) {
+    const rows = all('[data-course-seat-row]', courseSeatTable);
+    const count = (input) => Math.max(0, Number.parseInt(input?.value || '0', 10) || 0);
+    const formatSeats = (value) => Number(value).toLocaleString('en-IN');
+    const updateCourseRow = (row) => {
+      const capacity = count(one('[data-course-capacity]', row));
+      const fixed = Math.max(0, Number.parseInt(row.dataset.fixedSeats || '0', 10) || 0);
+      const allocated = fixed + all('[data-course-seat]', row).reduce((total, input) => total + count(input), 0);
+      const difference = capacity - allocated;
+      const balance = one('[data-course-balance]', row);
+      const allocatedOutput = one('[data-course-assigned]', row);
+      const state = capacity > 0 && difference === 0 ? 'is-ready' : (difference < 0 ? 'is-over' : 'is-short');
+      row.classList.remove('is-ready', 'is-short', 'is-over');
+      row.classList.add(state);
+      if (allocatedOutput) allocatedOutput.textContent = formatSeats(allocated);
+      if (balance) {
+        balance.classList.remove('is-ready', 'is-short', 'is-over');
+        balance.classList.add(state);
+        balance.textContent = capacity < 1 ? 'Set intake' : (state === 'is-ready' ? 'Ready' : (difference > 0 ? `+${formatSeats(difference)}` : formatSeats(difference)));
       }
+      return { capacity, allocated, difference, ready: state === 'is-ready' };
     };
-    [capacity, ...seatInputs].forEach((input) => input.addEventListener('input', updateSeatBalance));
-    updateSeatBalance();
+    const updateCourseTable = () => {
+      const totals = rows.reduce((summary, row) => {
+        const state = updateCourseRow(row);
+        summary.capacity += state.capacity;
+        summary.allocated += state.allocated;
+        summary.difference += state.difference;
+        summary.ready = summary.ready && state.ready;
+        return summary;
+      }, { capacity: 0, allocated: 0, difference: 0, ready: rows.length > 0 });
+      const capacityOutput = one('[data-seat-grand-capacity]');
+      const assignedOutput = one('[data-seat-grand-assigned]');
+      const balanceOutput = one('[data-seat-grand-balance]');
+      if (capacityOutput) capacityOutput.textContent = formatSeats(totals.capacity);
+      if (assignedOutput) assignedOutput.textContent = formatSeats(totals.allocated);
+      if (balanceOutput) {
+        balanceOutput.textContent = formatSeats(totals.difference);
+        const summaryCard = balanceOutput.closest('div');
+        summaryCard?.classList.toggle('is-ready', totals.ready);
+        summaryCard?.classList.toggle('is-pending', !totals.ready);
+      }
+      return totals;
+    };
+    all('input', courseSeatTable).forEach((input) => input.addEventListener('input', updateCourseTable));
+    all('[data-fill-general]', courseSeatTable).forEach((button) => button.addEventListener('click', () => {
+      const row = button.closest('[data-course-seat-row]');
+      if (!row) return;
+      const general = one('[data-general-seat]', row);
+      if (!general) return;
+      const capacity = count(one('[data-course-capacity]', row));
+      const fixed = Math.max(0, Number.parseInt(row.dataset.fixedSeats || '0', 10) || 0);
+      const otherCategorySeats = all('[data-course-seat]', row)
+        .filter((input) => input !== general)
+        .reduce((total, input) => total + count(input), 0);
+      general.value = String(Math.max(Number.parseInt(general.min || '0', 10) || 0, capacity - fixed - otherCategorySeats));
+      general.dispatchEvent(new Event('input', { bubbles: true }));
+      updateCourseTable();
+      general.focus();
+    }));
+    courseSeatTable.addEventListener('submit', (event) => {
+      const totals = updateCourseTable();
+      if (totals.ready) return;
+      event.preventDefault();
+      window.alert('Balance every course row before saving. Each reservation total must exactly equal the approved intake.');
+    });
+    updateCourseTable();
+  }
+
+  // Eligibility rules read as questions, so staff can see the policy they are building before saving it.
+  const updateEligibilityPreview = (form) => {
+    const preview = one('[data-eligibility-preview]', form);
+    const field = one('[data-eligibility-field]', form);
+    const operator = one('[data-eligibility-operator]', form);
+    const value = one('[data-eligibility-value]', form);
+    if (!preview || !field || !operator || !value) return;
+    const fieldLabel = field.options[field.selectedIndex]?.textContent.trim() || 'Applicant answer';
+    const operatorLabel = operator.options[operator.selectedIndex]?.textContent.trim().toLowerCase() || 'matches';
+    preview.textContent = value.value.trim()
+      ? `Rule preview: ${fieldLabel} ${operatorLabel} ${value.value.trim()}.`
+      : `Rule preview: choose the required answer for “${fieldLabel}”.`;
+  };
+  all('[data-eligibility-form]').forEach((form) => {
+    all('[data-eligibility-field], [data-eligibility-operator], [data-eligibility-value]', form)
+      .forEach((input) => input.addEventListener('input', () => updateEligibilityPreview(form)));
+    all('[data-eligibility-field], [data-eligibility-operator]', form)
+      .forEach((input) => input.addEventListener('change', () => updateEligibilityPreview(form)));
+    updateEligibilityPreview(form);
   });
+  all('[data-eligibility-preset]').forEach((button) => button.addEventListener('click', () => {
+    const builder = button.closest('.eligibility-builder');
+    const form = one('[data-eligibility-form]', builder);
+    if (!form) return;
+    const field = one('[data-eligibility-field]', form);
+    const operator = one('[data-eligibility-operator]', form);
+    const ruleType = one('[data-eligibility-rule-type]', form);
+    const message = one('[data-eligibility-message]', form);
+    if (field) field.value = button.dataset.field || field.value;
+    if (operator) operator.value = button.dataset.operator || operator.value;
+    if (ruleType) ruleType.value = button.dataset.ruleType || ruleType.value;
+    if (message) message.value = button.dataset.message || message.value;
+    updateEligibilityPreview(form);
+    one('[data-eligibility-value]', form)?.focus();
+  }));
 
   // Keep ordinary form customisation simple while preserving advanced keys and option formats.
   all('[data-key-builder]').forEach((builder) => {
@@ -339,25 +420,13 @@
     'Applicant instructions': 'Step-by-step guidance applicants should read before and during application.',
     'Applicant declaration': 'The statement applicants must accept before final submission.',
     'Prospectus PDF (maximum 10 MB)': 'Optional prospectus applicants can open from the public admission notice.',
-    'General category minimum (%)': 'Minimum Class 12 percentage used for applicants in the General category.',
-    'Reserved category minimum (%)': 'Minimum Class 12 percentage used for non-General reservation categories.',
-    'Programme state': 'Active programmes can be selected by applicants; inactive ones remain stored but unavailable.',
-    'Minimum age': 'Youngest permitted age when this admission cycle opens.',
-    'Maximum age': 'Oldest permitted age when this admission cycle opens. Leave blank when no maximum applies.',
-    'Accepted entrance examinations': 'Names of qualifying entrance examinations accepted for this programme.',
-    'Programme': 'The programme being included in this admission cycle.',
-    'Initial capacity': 'The approved total intake before it is divided into categories and seat pools.',
     'Application fee': 'Amount assessed for submitting an application to this programme.',
     'Admission fee': 'Amount assessed after an applicant is selected for admission.',
-    'Approved programme intake': 'The final seat total. Every category and seat-pool row must add up to this number.',
-    'Reservation category': 'The reservation group that may receive this row of seats, such as General, SC or ST.',
-    'Seat pool / quota': 'The source or pool of these seats, such as State, Management or NRI.',
-    'Number of seats': 'How many seats belong to this category and seat-pool combination.',
-    'Applicant information to check': 'Choose the applicant answer the eligibility engine should examine.',
-    'Condition': 'How the applicant answer is compared with the required value, for example at least or contains.',
-    'Required value': 'The threshold, accepted text or list the applicant answer is compared against.',
-    'Plain-language result shown to staff': 'A readable explanation recorded with the eligibility result.',
-    'Rule category': 'Groups this eligibility check as marks, age, subject, entrance or another rule type.',
+    'What should we check?': 'Choose the applicant information used to decide eligibility for this course.',
+    'What condition must pass?': 'Set how the answer is compared with the required value, such as at least or is one of.',
+    'What is the required answer?': 'Enter the threshold, accepted text or list the applicant answer must satisfy.',
+    'Explain this check to staff': 'Use clear language so staff understand why an applicant passes or needs review.',
+    'Check category': 'Groups the eligibility question as marks, age, subject, entrance or another kind of check.',
     'Evaluation order': 'Controls which eligibility check is evaluated first. Lower numbers come first.',
     'Fee type': 'Application fee is due during application; admission fee is due after selection.',
     'Category override': 'Use All categories for the normal amount, or choose one category for a special amount.',
@@ -393,11 +462,8 @@
     'Opening': 'Opening date and time for the duplicated cycle.',
     'Closing': 'Closing date and time for the duplicated cycle.',
     'Cycle identity, dates and applicant copy': 'Configure the public notice, application schedule and instructions applicants will read.',
-    'Choose programmes and intake defaults': 'Select available programmes and enter their basic marks, age and entrance requirements.',
-    'Basic entry requirements': 'These common thresholds are used by the detailed eligibility checks in the next step.',
-    'Divide seats and decide who is eligible': 'Make category seats equal approved intake, then define the checks applicants must pass.',
-    'Seat distribution': 'Divide approved intake among reservation categories and seat pools without exceeding the total.',
-    'Eligibility checks': 'Rules that compare saved applicant information with programme requirements.',
+    'Set course intake and reservation seats': 'Set each course intake, then make its General, SC, ST, OBC, EWS and other reservation seats total exactly to that intake.',
+    'Ask the eligibility questions for each course': 'Build one clear, testable eligibility question at a time and choose how failures should be handled.',
     'Set application and admission fees': 'Configure the charges used by server-side fee assessment.',
     'Fee rules': 'Base and category-specific application or admission charges for this programme.',
     'Design the application form': 'Organise sections and questions, then verify them in the student-style preview.',
