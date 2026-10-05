@@ -505,6 +505,97 @@
   padding-inline: 21px;
 }
 
+/* Creation form sections are intentionally independent from the generic settings grid. */
+.portal-page .admission-create-form > .admission-create-section {
+  padding: 26px 30px 28px;
+  border-bottom: 1px solid #e0ebe8;
+}
+
+.portal-page .admission-create-section-heading {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  margin-bottom: 19px;
+}
+
+.portal-page .admission-create-section-heading > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #bcd9d2;
+  border-radius: 10px;
+  background: #e9f5f2;
+  color: var(--teal);
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.portal-page .admission-create-section-heading h3 {
+  margin: 1px 0 3px;
+  color: #1e4744;
+  font-size: 1.05rem;
+}
+
+.portal-page .admission-create-section-heading p,
+.portal-page .admission-create-card-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: #647a76;
+  font-size: .8rem !important;
+  line-height: 1.55;
+}
+
+.portal-page .admission-create-section .form-grid {
+  gap: 20px;
+  padding: 0;
+}
+
+.portal-page .admission-create-section .form-grid > label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.portal-page .admission-create-section .form-grid > label > span {
+  color: #375954;
+  font-size: .8rem !important;
+  font-weight: 850;
+}
+
+.portal-page .admission-create-copy {
+  background: linear-gradient(135deg, #fcfefd, #f6fbf9);
+}
+
+.portal-page .admission-create-card-heading {
+  justify-content: space-between;
+}
+
+.portal-page .admission-create-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 3px 0 0 16px;
+  padding: 7px 10px;
+  border: 1px solid #c8e0da;
+  border-radius: 999px;
+  background: rgba(255,255,255,.84);
+  color: #2c7165;
+  font-size: .72rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.portal-page .admission-create-state::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #45a475;
+  box-shadow: 0 0 0 4px rgba(69,164,117,.12);
+  content: "";
+}
+
 @media (max-width: 1280px) {
   .portal-page .admin-main .workflow-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -529,7 +620,8 @@
     align-items: flex-start;
   }
 
-  .portal-page .admission-create-form > .form-grid {
+  .portal-page .admission-create-form > .form-grid,
+  .portal-page .admission-create-section .form-grid.three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -675,14 +767,29 @@
     right: 19px;
   }
 
-  .portal-page .admission-create-form > .form-grid {
+  .portal-page .admission-create-form > .form-grid,
+  .portal-page .admission-create-section .form-grid.three {
     grid-template-columns: 1fr;
     gap: 16px;
     padding: 20px 19px 23px;
   }
 
-  .portal-page .admission-create-form > .form-grid .full {
+  .portal-page .admission-create-section .form-grid.three {
+    padding: 0;
+  }
+
+  .portal-page .admission-create-form > .form-grid .full,
+  .portal-page .admission-create-section .form-grid .full,
+  .portal-page .admission-create-section .form-grid .span-2 {
     grid-column: auto;
+  }
+
+  .portal-page .admission-create-form > .admission-create-section {
+    padding: 20px 19px 22px;
+  }
+
+  .portal-page .admission-create-section-heading {
+    margin-bottom: 16px;
   }
 
   .portal-page .admission-create-form > .form-actions {
@@ -695,6 +802,15 @@
   .portal-page .admission-create-form > .form-actions .button {
     width: 100%;
     text-align: center;
+  }
+
+  .portal-page .admission-create-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .portal-page .admission-create-state {
+    margin-left: 0;
   }
 }
 
@@ -713,7 +829,8 @@
   }
 
   .portal-page .admission-cycle-table-card > .card-heading,
-  .portal-page .programme-catalogue-card > .card-heading {
+  .portal-page .programme-catalogue-card > .card-heading,
+  .portal-page .admission-create-card-heading {
     align-items: flex-start;
     flex-direction: column;
   }
