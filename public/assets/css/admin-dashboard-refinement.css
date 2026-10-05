@@ -243,6 +243,268 @@
   min-width: 68px;
 }
 
+/* Admission cycle list and the first-step creation form. */
+.portal-page .admissions-index-heading,
+.portal-page .admission-create-heading {
+  position: relative;
+  align-items: flex-end;
+  padding: 4px 0 8px;
+}
+
+.portal-page .admissions-index-heading::after,
+.portal-page .admission-create-heading::after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  width: min(24vw, 310px);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #61aa9c, #dfb758);
+  content: "";
+}
+
+.portal-page .admission-cycle-table-card,
+.portal-page .programme-catalogue-card {
+  overflow: hidden;
+  margin-top: 18px;
+  border-color: #cfdfdb;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(10,53,57,.05);
+}
+
+.portal-page .admission-cycle-table-card > .card-heading,
+.portal-page .programme-catalogue-card > .card-heading {
+  min-height: 82px;
+  margin: 0;
+  padding: 19px 22px;
+  border-bottom: 1px solid #dce7e4;
+  background: linear-gradient(112deg, #f1faf7, #fff 65%, #fffaf0);
+}
+
+.portal-page .admission-cycle-table-card > .card-heading h2,
+.portal-page .programme-catalogue-card > .card-heading h2 {
+  color: var(--navy);
+  font-size: 1.45rem;
+}
+
+.portal-page .programme-catalogue-card > .card-heading > span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid #d2e3de;
+  border-radius: 999px;
+  background: #fff;
+  color: #526b67;
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.portal-page .admission-cycle-table-card .table-wrap,
+.portal-page .programme-catalogue-card .table-wrap {
+  scrollbar-color: #91b8af #edf4f2;
+}
+
+.portal-page .admission-cycle-table-card table,
+.portal-page .programme-catalogue-card table {
+  min-width: 840px;
+}
+
+.portal-page .admission-cycle-table-card thead th,
+.portal-page .programme-catalogue-card thead th {
+  padding: 13px 16px;
+  border-bottom: 1px solid #dfe9e6;
+  background: #f8fbfa;
+  color: #5c7772;
+  font-size: .7rem !important;
+  letter-spacing: .07em;
+}
+
+.portal-page .admission-cycle-table-card tbody tr,
+.portal-page .programme-catalogue-card tbody tr {
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+
+.portal-page .admission-cycle-table-card tbody tr:hover,
+.portal-page .programme-catalogue-card tbody tr:hover {
+  background: #f5fbf9;
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.portal-page .admission-cycle-table-card td,
+.portal-page .programme-catalogue-card td {
+  padding: 15px 16px;
+  border-bottom-color: #e4edeb;
+}
+
+.portal-page .admission-cycle-table-card td > b,
+.portal-page .programme-catalogue-card td > b {
+  color: #244541;
+  font-size: .86rem;
+}
+
+.portal-page .admission-cycle-table-card code,
+.portal-page .programme-catalogue-card code {
+  display: inline-block;
+  padding: 4px 7px;
+  border: 1px solid #d5e4e0;
+  border-radius: 6px;
+  background: #f2f8f6;
+  color: #236863;
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.portal-page .admission-cycle-table-card .cell-subtitle,
+.portal-page .programme-catalogue-card .cell-subtitle {
+  margin-top: 5px;
+  color: #70817d;
+  font-size: .73rem !important;
+}
+
+.portal-page .admission-cycle-table-card .row-action {
+  width: 36px;
+  height: 36px;
+  border-color: #bdd5cf;
+}
+
+.portal-page .admission-cycle-table-card .row-action:hover {
+  border-color: var(--teal);
+  background: #eaf6f3;
+}
+
+.portal-page .admission-programme-create {
+  margin: 20px 22px 22px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px dashed #abcac2;
+  border-radius: 12px;
+  background: #f7fbfa;
+}
+
+.portal-page .admission-programme-create > summary {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 44px;
+  margin: 14px;
+  list-style: none;
+}
+
+.portal-page .admission-programme-create > summary::-webkit-details-marker {
+  display: none;
+}
+
+.portal-page .admission-programme-create[open] > summary {
+  margin-bottom: 0;
+}
+
+.portal-page .admission-programme-create > form {
+  margin: 14px 0 0;
+  padding: 20px;
+  border-top: 1px dashed #c6ddd7;
+  background: #fff;
+}
+
+.portal-page .admission-programme-create > form > .button {
+  margin-top: 2px;
+}
+
+.portal-page .admission-create-form {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border-color: #c9ddd8;
+  border-radius: 16px;
+  box-shadow: 0 18px 42px rgba(8,49,53,.075);
+}
+
+.portal-page .admission-create-form > .card-heading {
+  position: relative;
+  align-items: flex-start;
+  min-height: 128px;
+  margin: 0;
+  padding: 29px 30px 25px;
+  border-bottom: 1px solid #d7e6e2;
+  background: radial-gradient(circle at 92% 20%, rgba(225,181,82,.21), transparent 24%), linear-gradient(120deg, #edf9f6, #fff 61%, #fffaf0);
+}
+
+.portal-page .admission-create-form > .card-heading::after {
+  position: absolute;
+  right: 30px;
+  bottom: 0;
+  width: 130px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, var(--teal), #6bae9f, #dfb758);
+  content: "";
+}
+
+.portal-page .admission-create-form > .card-heading h2 {
+  max-width: 760px;
+  margin-top: 5px;
+  color: #173e3e;
+  font-size: clamp(1.45rem, 2.5vw, 1.85rem);
+}
+
+.portal-page .admission-create-form > .form-grid {
+  gap: 20px;
+  padding: 28px 30px 30px;
+}
+
+.portal-page .admission-create-form > .form-grid > label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.portal-page .admission-create-form > .form-grid > label > span {
+  color: #375954;
+  font-size: .8rem !important;
+  font-weight: 850;
+}
+
+.portal-page .admission-create-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea) {
+  border-color: #bad4ce;
+  background: #fff;
+}
+
+.portal-page .admission-create-form textarea {
+  min-height: 126px;
+  line-height: 1.55;
+}
+
+.portal-page .admission-create-form input[type="datetime-local"] {
+  min-width: 0;
+  color-scheme: light;
+}
+
+.portal-page .admission-create-form > .form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0;
+  padding: 18px 30px;
+  border-top: 1px solid #dbe7e4;
+  background: #f8fbfa;
+}
+
+.portal-page .admission-create-form > .form-actions > a {
+  color: #496560;
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.portal-page .admission-create-form > .form-actions > a:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.portal-page .admission-create-form > .form-actions .button {
+  min-height: 48px;
+  padding-inline: 21px;
+}
+
 @media (max-width: 1280px) {
   .portal-page .admin-main .workflow-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -260,6 +522,15 @@
 
   .portal-page .workflow-table-heading {
     align-items: flex-start;
+  }
+
+  .portal-page .admissions-index-heading,
+  .portal-page .admission-create-heading {
+    align-items: flex-start;
+  }
+
+  .portal-page .admission-create-form > .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -375,6 +646,56 @@
   .portal-page .workflow-applicant {
     min-width: 0;
   }
+
+  .portal-page .admission-cycle-table-card,
+  .portal-page .programme-catalogue-card {
+    margin-top: 15px;
+  }
+
+  .portal-page .admission-cycle-table-card > .card-heading,
+  .portal-page .programme-catalogue-card > .card-heading {
+    min-height: 0;
+    padding: 17px 18px;
+  }
+
+  .portal-page .admission-programme-create {
+    margin: 16px;
+  }
+
+  .portal-page .admission-programme-create > form {
+    padding: 16px;
+  }
+
+  .portal-page .admission-create-form > .card-heading {
+    min-height: 0;
+    padding: 23px 19px 20px;
+  }
+
+  .portal-page .admission-create-form > .card-heading::after {
+    right: 19px;
+  }
+
+  .portal-page .admission-create-form > .form-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 20px 19px 23px;
+  }
+
+  .portal-page .admission-create-form > .form-grid .full {
+    grid-column: auto;
+  }
+
+  .portal-page .admission-create-form > .form-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    gap: 13px;
+    padding: 16px 19px;
+  }
+
+  .portal-page .admission-create-form > .form-actions .button {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 @media (max-width: 430px) {
@@ -390,10 +711,18 @@
   .portal-page .application-workflow-table td.table-select {
     width: auto;
   }
+
+  .portal-page .admission-cycle-table-card > .card-heading,
+  .portal-page .programme-catalogue-card > .card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .portal-page .application-workflow-table tbody tr,
+  .portal-page .admission-cycle-table-card tbody tr,
+  .portal-page .programme-catalogue-card tbody tr,
   .portal-page .admin-main .form-grid :is(input, select, textarea),
   .portal-page .admin-main .workflow-filters :is(input, select) {
     transition: none;
