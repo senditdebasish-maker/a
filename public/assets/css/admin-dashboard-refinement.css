@@ -1722,3 +1722,8 @@
 .merit-preview-aside > span { color: var(--teal); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .merit-preview-aside h3 { margin: .3rem 0 .8rem; font: 700 1.25rem var(--serif); }
 @media (max-width: 760px) { .merit-preview-grid { grid-template-columns: 1fr; } }
+
+/* Passwordless authentication depends on SMTP; make that requirement explicit. */
+.portal-page .mail-required-mode { display: grid; gap: .2rem; padding: .8rem .9rem; border: 1px solid #a7cec8; border-radius: .65rem; background: #edf8f6; }
+.portal-page .mail-required-mode b { color: var(--teal); font-size: .86rem; }
+.portal-page .mail-required-mode small { color: var(--muted); font-size: .76rem; line-height: 1.45; }

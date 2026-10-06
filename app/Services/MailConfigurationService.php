@@ -26,7 +26,7 @@ final class MailConfigurationService
     {
         $base = (array) config('mail', []);
         $config = [
-            'driver' => strtolower((string) ($base['driver'] ?? 'log')),
+            'driver' => strtolower((string) ($base['driver'] ?? 'smtp')),
             'host' => (string) ($base['host'] ?? ''),
             'port' => (int) ($base['port'] ?? 587),
             'auth' => $this->boolValue($base['auth'] ?? true),
@@ -111,7 +111,10 @@ final class MailConfigurationService
         $errors = [];
         $addError = static function (string $field, string $message) use (&$errors): void { $errors[$field][] = $message; };
 
-        if (!in_array($driver, ['log', 'smtp'], true)) $addError('mail_driver', 'Choose local log or authenticated SMTP delivery.');
+        if (!in_array($driver, ['log', 'smtp'], true)) $addError('mail_driver', 'Choose SMTP delivery.');
+        if ((string) config('security.login_mode', 'email_otp') === 'email_otp' && $driver !== 'smtp') {
+            $addError('mail_driver', 'Passwordless email-code sign-in requires SMTP delivery.');
+        }
         if ($host !== '' && (mb_strlen($host) > 255 || preg_match('/[\s\/?#]/u', $host) || str_contains($host, '://'))) $addError('mail_host', 'Enter only the SMTP host name or IP address, without a protocol, path or spaces.');
         if ($port === false || $port < 1 || $port > 65535) $addError('mail_port', 'SMTP port must be between 1 and 65,535.');
         if (!in_array($encryptionInput, ['none', 'tls', 'ssl'], true)) $addError('mail_encryption', 'Choose no encryption, STARTTLS or implicit TLS.');

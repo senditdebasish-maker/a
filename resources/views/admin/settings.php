@@ -6,7 +6,7 @@ function settingValue(array $settings, string $key, string $default = ''): strin
 $oldSettings = flash('_old', []);
 $mailInputReturned = is_array($oldSettings) && array_key_exists('mail_driver', $oldSettings);
 $mailAuthChecked = $mailInputReturned ? array_key_exists('mail_auth', $oldSettings) : !empty($mailSettings['auth']);
-$mailDriver = (string) old('mail_driver', $mailSettings['driver']);
+$mailDriver = 'smtp';
 $mailEncryption = (string) old('mail_encryption', $mailSettings['encryption_option']);
 ?>
 <div class="page-heading admin-heading">
@@ -44,8 +44,8 @@ $mailEncryption = (string) old('mail_encryption', $mailSettings['encryption_opti
 
         <section class="card settings-section mail-settings-section" id="email" data-section-panel>
             <div class="section-title mail-section-title">
-                <div><span class="eyebrow">Transactional communication</span><h2>Email &amp; SMTP delivery</h2><p>Connect the portal to the institution's authenticated mail server for verification links, password resets, staff sign-in codes and operational messages.</p></div>
-                <span class="mail-mode-badge <?= $mailDriver === 'smtp' ? 'is-live' : 'is-log' ?>" data-mail-mode-badge><?= $mailDriver === 'smtp' ? 'SMTP enabled' : 'Local log mode' ?></span>
+                <div><span class="eyebrow">Transactional communication</span><h2>Email &amp; SMTP delivery</h2><p>Connect the portal to the institution's SMTP server for verification links, passwordless sign-in codes and operational messages.</p></div>
+                <span class="mail-mode-badge <?= !empty($mailSettings['complete']) ? 'is-live' : 'is-log' ?>" data-mail-mode-badge><?= !empty($mailSettings['complete']) ? 'SMTP ready' : 'SMTP required' ?></span>
             </div>
 
             <div class="mail-setup-hero">
@@ -53,7 +53,7 @@ $mailEncryption = (string) old('mail_encryption', $mailSettings['encryption_opti
                 <div class="mail-setup-copy">
                     <span class="eyebrow">Current delivery status</span>
                     <h3><?= !empty($mailSettings['complete']) ? 'SMTP is configured for live delivery' : 'Complete and test SMTP before launch' ?></h3>
-                    <p><?= !empty($mailSettings['complete']) ? 'The application can use the saved SMTP connection. Send a test after any server or credential change.' : 'Local log mode is safe for development, but authentication messages containing secrets are deliberately suppressed until SMTP is enabled.' ?></p>
+                    <p><?= !empty($mailSettings['complete']) ? 'The application can deliver passwordless sign-in codes. Send a test after any server or credential change.' : 'Passwordless sign-in cannot work until SMTP is complete and tested.' ?></p>
                 </div>
                 <div class="mail-config-source"><span>Configuration source</span><b><?= $mailSettings['source'] === 'admin_settings' ? 'Encrypted admin settings' : '.env fallback' ?></b><small>Admin settings take precedence after the first save.</small></div>
             </div>
@@ -65,15 +65,12 @@ $mailEncryption = (string) old('mail_encryption', $mailSettings['encryption_opti
             <div class="mail-delivery-choice">
                 <label class="mail-driver-card">
                     <span>Delivery mode</span>
-                    <select name="mail_driver" data-mail-driver>
-                        <option value="log"<?= selected($mailDriver, 'log') ?>>Local log — development only</option>
-                        <option value="smtp"<?= selected($mailDriver, 'smtp') ?>>SMTP — send real email</option>
-                    </select>
-                    <small>Authentication emails are never written to the local message body log.</small>
+                    <input type="hidden" name="mail_driver" value="smtp">
+                    <div class="mail-required-mode"><b>SMTP — required for passwordless sign-in</b><small>Authentication emails never retain codes or message bodies in the delivery log.</small></div>
                     <?= error('mail_driver') ? '<small class="field-error">' . e(error('mail_driver')) . '</small>' : '' ?>
                 </label>
                 <div class="mail-delivery-explainer" data-mail-mode-copy>
-                    <b><?= $mailDriver === 'smtp' ? 'Live delivery selected' : 'Development safety mode' ?></b>
+                    <b>Passwordless sign-in delivery</b>
                     <span><?= $mailDriver === 'smtp' ? 'Messages will be delivered through the server below after validation.' : 'Non-sensitive messages are logged; OTPs and account links are suppressed.' ?></span>
                 </div>
             </div>
@@ -143,7 +140,7 @@ $mailEncryption = (string) old('mail_encryption', $mailSettings['encryption_opti
 
         <section class="card settings-section" id="security" data-section-panel>
             <div class="section-title"><div><span class="eyebrow">Production baseline</span><h2>Security status</h2></div></div>
-            <div class="security-checks"><div><i>✓</i><span><b>Protected private storage</b><small>Uploads are streamed through authorisation checks</small></span></div><div><i>✓</i><span><b>AES-256-GCM field encryption</b><small>Configured identity and SMTP credential values use the application key</small></span></div><div><i>✓</i><span><b>Staff email MFA</b><small>Required when enabled in environment settings</small></span></div><div><i>✓</i><span><b>Audit trail</b><small>Settings, connection tests, sign-in and decisions are recorded without secrets</small></span></div></div>
+            <div class="security-checks"><div><i>✓</i><span><b>Protected private storage</b><small>Uploads are streamed through authorisation checks</small></span></div><div><i>✓</i><span><b>AES-256-GCM field encryption</b><small>Configured identity and SMTP credential values use the application key</small></span></div><div><i>✓</i><span><b>Email-code sign-in</b><small>Every user verifies a one-time code delivered by SMTP</small></span></div><div><i>✓</i><span><b>Audit trail</b><small>Settings, connection tests, sign-in and decisions are recorded without secrets</small></span></div></div>
         </section>
 
         <div class="settings-save"><span>Changes to sensitive settings are encrypted where required and written to the audit trail without passwords.</span><button class="button button-primary" type="submit">Save all settings</button></div>

@@ -106,15 +106,19 @@ final class BrowserSession
         echo "PASS POST {$action} status {$expected}\n";
     }
 
-    public function login(string $email, string $password, string $landingNeedle): void
+    public function login(string $email, string $landingNeedle): void
     {
         $page = $this->request('GET', '/login');
         if (!preg_match('/name="_token" value="([^"]+)"/', $page['body'], $match)) throw new RuntimeException('Login CSRF token not found.');
-        $response = $this->request('POST', '/login', ['_token' => html_entity_decode($match[1]), 'email' => $email, 'password' => $password]);
-        if ($response['status'] !== 200 || !str_contains($response['body'], $landingNeedle)) {
-            throw new RuntimeException("Login failed for {$email}; final URL {$response['url']}, status {$response['status']}");
+        $codePage = $this->request('POST', '/login', ['_token' => html_entity_decode($match[1]), 'email' => $email]);
+        if ($codePage['status'] !== 200 || !str_contains($codePage['body'], 'Check your inbox') || !preg_match('/name="_token" value="([^"]+)"/', $codePage['body'], $codeMatch)) {
+            throw new RuntimeException("Email-code request failed for {$email}; final URL {$codePage['url']}, status {$codePage['status']}");
         }
-        echo "PASS login {$email}\n";
+        $response = $this->request('POST', '/login/otp', ['_token' => html_entity_decode($codeMatch[1]), 'code' => '123456']);
+        if ($response['status'] !== 200 || !str_contains($response['body'], $landingNeedle)) {
+            throw new RuntimeException("Email-code verification failed for {$email}; final URL {$response['url']}, status {$response['status']}");
+        }
+        echo "PASS email-code sign-in {$email}\n";
     }
 }
 
@@ -141,7 +145,7 @@ foreach ([
 ] as $path => $needle) $public->get($path, $needle);
 
 $applicant = new BrowserSession($base);
-$applicant->login('ishita@demo.test', 'StudentDemo#2027', 'Applicant dashboard');
+$applicant->login('ishita@demo.test', 'Applicant dashboard');
 foreach ([
     '/student/dashboard' => 'Applicant dashboard', '/student/application' => 'Personal details',
     '/student/payments' => 'Payments & receipts', '/student/messages' => 'Messages & notifications',
@@ -155,7 +159,7 @@ if ($pdf['status'] !== 200 || !str_contains($pdf['content_type'], 'application/p
 echo "PASS Dompdf application download\n";
 
 $admin = new BrowserSession($base);
-$admin->login('ci-admin@example.test', 'CI-Temporary#2027', 'Administration');
+$admin->login('ci-admin@example.test', 'Administration');
 $liveStart=date('Y-m-d\TH:i',strtotime('-1 day'));
 $liveEnd=date('Y-m-d\TH:i',strtotime('+30 days'));
 $correctionEnd=date('Y-m-d\TH:i',strtotime('+37 days'));
@@ -386,7 +390,7 @@ foreach ([
 $admin->get('/admin/settings#email','Email &amp; SMTP delivery');
 $smtpFixturePassword='CI-SMTP-'.bin2hex(random_bytes(12));
 $mailSettingsPayload=[
-    'mail_driver'=>'log','mail_host'=>'smtp.example.test','mail_port'=>587,'mail_auth'=>1,
+    'mail_driver'=>'smtp','mail_host'=>'smtp.example.test','mail_port'=>587,'mail_auth'=>1,
     'mail_username'=>'ci-mailer@example.test','mail_password'=>$smtpFixturePassword,'mail_encryption'=>'tls',
     'mail_from_address'=>'ci-mailer@example.test','mail_from_name'=>'CI Pharmacy Mailer','mail_timeout'=>20,
 ];
@@ -404,8 +408,10 @@ if((string)$ciDb->query("SELECT value FROM settings WHERE key_name='mail_passwor
 $testTokenPage=$admin->request('GET','/admin/settings#email');
 if(!preg_match('/name="_token" value="([^"]+)"/',$testTokenPage['body'],$mailTokenMatch))throw new RuntimeException('SMTP settings CSRF token not found.');
 $rejectedSecret='CI-REJECTED-'.bin2hex(random_bytes(8));
-$rejectedTest=$admin->request('POST','/admin/settings/email/test',['_token'=>html_entity_decode($mailTokenMatch[1])]+array_merge($mailSettingsPayload,['mail_password'=>$rejectedSecret,'mail_test_recipient'=>'ci-admin@example.test']));
-if($rejectedTest['status']!==200||!str_contains($rejectedTest['body'],'Choose SMTP delivery before sending a test email')||str_contains($rejectedTest['body'],$rejectedSecret))throw new RuntimeException('SMTP test validation did not reject log mode without retaining the posted password.');
+$rejectedTest=$admin->request('POST','/admin/settings/email/test',['_token'=>html_entity_decode($mailTokenMatch[1])]+array_merge($mailSettingsPayload,['mail_driver'=>'log','mail_password'=>$rejectedSecret,'mail_test_recipient'=>'ci-admin@example.test']));
+if($rejectedTest['status']!==200||!str_contains($rejectedTest['body'],'Passwordless email-code sign-in requires SMTP delivery')||str_contains($rejectedTest['body'],$rejectedSecret))throw new RuntimeException('SMTP test validation did not reject local-log delivery without retaining the posted password.');
+// Later browser sessions exercise the CI-only redacted log transport rather than a real SMTP host.
+$ciDb->exec("UPDATE settings SET value='log', updated_at=NOW() WHERE key_name='mail_driver'");
 echo "PASS encrypted SMTP settings, password preservation, safe audit/rendering, and guarded test delivery\n";
 $admin->get('/admin/applications?view=board','Application lifecycle board');
 $admin->get('/admin/applications?view=table','records on this page');
@@ -477,7 +483,7 @@ if(!$formulaEscaped)throw new RuntimeException('Spreadsheet formula injection wa
 echo "PASS filtered application CSV export and formula escaping\n";
 
 $reviewer=new BrowserSession($base);
-$reviewer->login('reviewer@demo.test','DemoReviewer#2027','Administration');
+$reviewer->login('reviewer@demo.test', 'Administration');
 $reviewer->get('/admin/applications/2','Decision readiness');
 $reviewerBoard=$reviewer->request('GET','/admin/applications?view=board');
 if($reviewerBoard['status']!==200||!str_contains($reviewerBoard['body'],'NCP-APP-2027-000002')||str_contains($reviewerBoard['body'],'NCP-APP-2027-000001'))throw new RuntimeException('Reviewer board scope exposed an application outside the reviewer assignment.');
@@ -491,7 +497,7 @@ $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/1/publish',
 $reviewer->postExpectStatus('/admin/admissions/1','/admin/admissions/'.$copyId.'/form-fields',['section_id'=>1,'field_key'=>'forbidden','label'=>'Forbidden','field_type'=>'text'],403);
 
 $accounts=new BrowserSession($base);
-$accounts->login('accounts@demo.test','DemoAccounts#2027','Administration');
+$accounts->login('accounts@demo.test', 'Administration');
 $accounts->get('/admin/admissions','Admission management');
 $accounts->get('/admin/reports','Admissions reports');
 $accounts->expectStatus('/admin/admissions/create',403);

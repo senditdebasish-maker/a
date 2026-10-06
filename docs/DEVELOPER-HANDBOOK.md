@@ -26,8 +26,8 @@ The seeded college identity and all seeded academic/approval information are dem
 
 - Public institutional website and CMS.
 - English, Bengali and Hindi translation foundations with English fallback.
-- Applicant registration, email verification, login and password recovery.
-- Optional SMTP-delivered staff MFA/OTP.
+- Applicant registration and email verification.
+- Passwordless SMTP-delivered email-OTP sign-in for applicants, students and staff.
 - Configurable admission sessions, cycles, programmes, eligibility rules, seat matrix, fees and document requirements.
 - Complete Indian admission form and protected document upload.
 - Application review, assignment, eligibility indicators, corrections, decisions and history.
@@ -163,7 +163,7 @@ Route parameters use `{name}` and match one non-slash path segment. Route order 
 | Layout | Used for |
 |---|---|
 | `resources/views/layouts/public.php` | Public college website. |
-| `resources/views/layouts/auth.php` | Login, registration, recovery and MFA. |
+| `resources/views/layouts/auth.php` | Email-code sign-in and applicant registration. |
 | `resources/views/layouts/student.php` | Applicant/admitted-student self-service. |
 | `resources/views/layouts/admin.php` | Staff and management tools. |
 | `resources/views/layouts/document.php` | Compact printable application document. |
@@ -232,9 +232,9 @@ The apply command requires explicit confirmation that an encrypted, independentl
 - `settings` — grouped runtime/institution settings.
 - `roles`, `permissions`, `user_roles`, `role_permissions` — RBAC.
 - `users` — shared applicant, student and staff identity.
-- `login_attempts` — authentication throttle evidence.
-- `mfa_challenges` — expiring hashed staff OTP challenges.
-- `password_resets` — hashed, expiring recovery tokens.
+- `login_attempts` — legacy authentication-throttle evidence retained for history.
+- `mfa_challenges` — expiring hashed email-code sign-in challenges for every account type.
+- `password_resets` — legacy recovery-token records retained for history; password reset is no longer an active flow.
 
 ### Academic/admission configuration
 
@@ -356,7 +356,7 @@ The decisive identity rule is: **one person keeps one user account from applican
 ### Applicant registration
 
 1. Registration is allowed only when a cycle is `open` and the current timestamp is inside its dates.
-2. Input is validated, including a password with upper-case, lower-case, number and symbol.
+2. Input is validated for name, email, mobile number and terms acceptance; no password is collected.
 3. A `users` row is created.
 4. The `applicant` role is assigned.
 5. An `applicant_profiles` row and privacy consent record are created.
@@ -364,28 +364,16 @@ The decisive identity rule is: **one person keeps one user account from applican
 7. Verification email is sent or logged.
 8. Login is blocked until `email_verified_at` is set.
 
-### Login
+### Passwordless email-code sign-in
 
-- Passwords use PHP `password_hash()` and `password_verify()`.
-- Failed attempts are recorded by email/IP.
-- Five failures inside the configured 15-minute window trigger throttling.
-- Sessions regenerate on login.
-- Applicants go to `/student/dashboard`; staff go to `/admin/dashboard`.
-
-### Password recovery
-
-- The response does not reveal whether an email exists.
-- The random reset token is stored as a SHA-256 hash.
-- Reset links expire after one hour and become unusable after use.
-
-### Staff MFA
-
-- Controlled by `REQUIRE_STAFF_MFA`.
-- Fresh installations default to `false` to prevent locking out the first administrator before SMTP is configured.
-- MFA can run only when the effective mail configuration uses SMTP. Admin Settings overrides the `.env` fallback after it is saved.
-- Codes are six digits, stored as password hashes, expire after ten minutes and allow five attempts.
-- Resend has a one-minute cooldown and invalidates prior active codes.
-- Failed delivery invalidates the challenge and returns safely to login.
+- Applicants, students and staff enter their email address, then verify a six-digit one-time code before a session is created.
+- Active, email-verified accounts only receive a code. The public delivery response is the same for matching and non-matching addresses.
+- Codes are generated with `random_int`, stored only as password hashes, expire after ten minutes, allow five attempts and are marked used atomically on success.
+- Resend has a one-minute cooldown and invalidates older active challenges for that account.
+- A session-specific challenge ID prevents a code created in another browser session from being accepted by the current flow.
+- SMTP is mandatory: Local email log deliberately suppresses secret-bearing messages and cannot sign users in.
+- Authentication messages are redacted from email logs. Sessions regenerate after successful verification; applicants go to `/student/dashboard` and staff go to `/admin/dashboard`.
+- The legacy `password_hash` column remains populated with an unshared random value for schema compatibility. Password-reset URLs redirect users to email-code sign-in.
 
 ## 11. RBAC
 
@@ -592,18 +580,17 @@ Release 1 stores retention settings and consent/audit evidence. It does not yet 
 
 `MailService` supports:
 
-- `MAIL_DRIVER=log` — records non-sensitive messages in `mail_logs` without external delivery;
-- `MAIL_DRIVER=smtp` — sends synchronously through PHPMailer and records success/failure.
+- `MAIL_DRIVER=log` — records non-sensitive messages in `mail_logs` without external delivery and suppresses authentication secrets; it cannot support passwordless sign-in;
+- `MAIL_DRIVER=smtp` — sends synchronously through PHPMailer and records a safe success/failure result. Passwordless deployments require this driver.
 
-Super administrators with `settings.edit` can configure the effective delivery method under **Admin Settings → Email & SMTP**. The editor supports host, port, STARTTLS/implicit TLS, optional SMTP authentication, username, encrypted password, sender identity and connection timeout. Saving creates private `settings` rows that override the `.env` fallback. The SMTP password is encrypted with AES-256-GCM through `App\Core\Encryption`; it is never rendered back to the browser, copied into old-input flash data, or included in audit events. Leaving the password field empty preserves the existing secret, and explicit removal remains server validated.
+Super administrators with `settings.edit` can configure the required SMTP delivery under **Admin Settings → Email & SMTP**. The editor supports host, port, STARTTLS/implicit TLS, SMTP authentication, username, encrypted password, sender identity and connection timeout. Saving creates private `settings` rows that override the `.env` fallback. The SMTP password is encrypted with AES-256-GCM through `App\Core\Encryption`; it is never rendered back to the browser, copied into old-input flash data, or included in audit events. Leaving the password field empty preserves the existing secret, and explicit removal remains server validated.
 
-**Save & send test email** persists the validated settings and exercises the same `MailService` route used by the application. Success or a safely redacted failure appears in the email delivery log. The test endpoint is authenticated, permission checked, CSRF protected and will not run while Local log mode is selected. TLS certificate verification cannot be disabled from the UI.
+**Save & send test email** persists the validated settings and exercises the same `MailService` route used by the application. Success or a safely redacted failure appears in the email delivery log. The test endpoint is authenticated, permission checked and CSRF protected. Local log delivery is rejected while passwordless sign-in is enabled. TLS certificate verification cannot be disabled from the UI.
 
 Used for:
 
 - email verification;
-- password reset;
-- staff MFA;
+- passwordless sign-in codes for applicants, students and staff;
 - enquiry replies and workflow communication where configured.
 
 For Gmail, use a Google App Password or an approved Workspace relay. Never commit SMTP credentials. Environment values remain useful for automated deployment, but the production preflight evaluates the effective database-over-environment configuration.
@@ -841,8 +828,9 @@ SESSION_NAME=ncp_session
 SESSION_LIFETIME=120
 SESSION_SECURE=false
 
-MAIL_DRIVER=log
-MAIL_HOST=
+LOGIN_MODE=email_otp
+MAIL_DRIVER=smtp
+MAIL_HOST=smtp.your-provider.example
 MAIL_PORT=587
 MAIL_AUTH=true
 MAIL_USERNAME=
@@ -851,7 +839,6 @@ MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=admissions@example.edu.in
 MAIL_FROM_NAME="Netaji College of Pharmacy"
 MAIL_TIMEOUT=20
-REQUIRE_STAFF_MFA=false
 ```
 
 ### Storage and backup
@@ -1020,7 +1007,7 @@ Run:
 php scripts/preflight.php
 ```
 
-It checks PHP/extensions, installation state, debug, key, HTTPS, secure sessions, SMTP, MFA, writable storage, database connectivity, placeholder identity, open cycles and backup history.
+It checks PHP/extensions, installation state, debug, key, HTTPS, secure sessions, required SMTP, passwordless email-code mode, writable storage, database connectivity, placeholder identity, open cycles and backup history.
 
 Also complete `docs/PRODUCTION-CHECKLIST.md`. Automated checks do not replace legal, security, accessibility, browser/device, load or institutional user-acceptance testing.
 
@@ -1069,8 +1056,8 @@ Before writing code, the receiving developer should be able to answer:
 - How does a route enforce permission server-side?
 - How does admission preserve the same account?
 - Where are uploaded files stored and how are they streamed?
-- What does `MAIL_DRIVER=log` do?
-- Why can staff MFA not be enabled before SMTP works?
+- Why is `MAIL_DRIVER=log` unsuitable for passwordless sign-in?
+- Why must SMTP be configured and tested before anyone can sign in?
 - Which data is encrypted, and why must `APP_KEY` be preserved?
 - How is an application state change audited?
 - How will an existing Release 1 database be migrated safely?

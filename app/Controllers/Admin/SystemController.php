@@ -30,11 +30,9 @@ final class SystemController extends Controller
         $validator = new Validator();
         $errors = $validator->validate($_POST, [
             'first_name' => 'required|max:80', 'last_name' => 'required|max:80', 'email' => 'required|email|max:190',
-            'password' => 'required|min:12', 'role_id' => 'required|numeric',
+            'role_id' => 'required|numeric',
         ]);
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-        $password = (string) ($_POST['password'] ?? '');
-        if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/\d/', $password) || !preg_match('/[^A-Za-z0-9]/', $password)) $errors['password'][] = 'Use upper-case, lower-case, a number, and a symbol.';
         $db = Database::get();
         if ($db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $email])) $errors['email'][] = 'That email already belongs to a user.';
         $role = $db->fetch('SELECT id, slug FROM roles WHERE id = :id', ['id' => (int) ($_POST['role_id'] ?? 0)]);
@@ -42,10 +40,13 @@ final class SystemController extends Controller
         if ($errors) {
             Flash::withErrors($errors); Flash::withInput($_POST); Flash::set('warning', 'Review the staff account details.'); $this->redirect('admin/users');
         }
-        $userId = $db->transaction(function (Database $db) use ($email, $password, $role): int {
+        // password_hash remains NOT NULL for historical schema compatibility. No
+        // person receives this random value: sign-in is exclusively by email code.
+        $unsharedPassword = bin2hex(random_bytes(32));
+        $userId = $db->transaction(function (Database $db) use ($email, $unsharedPassword, $role): int {
             $id = $db->insert('users', [
                 'first_name' => trim((string) $_POST['first_name']), 'last_name' => trim((string) $_POST['last_name']),
-                'email' => $email, 'mobile' => trim((string) ($_POST['mobile'] ?? '')), 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                'email' => $email, 'mobile' => trim((string) ($_POST['mobile'] ?? '')), 'password_hash' => password_hash($unsharedPassword, PASSWORD_DEFAULT),
                 'status' => 'active', 'preferred_locale' => 'en', 'email_verified_at' => date('Y-m-d H:i:s'), 'password_changed_at' => date('Y-m-d H:i:s'),
                 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
             ]);
@@ -53,7 +54,7 @@ final class SystemController extends Controller
             return $id;
         });
         AuditService::log('staff_user_created', 'user', $userId, [], ['role' => $role['slug']]);
-        Flash::set('success', 'Staff account created. Share the temporary password through an approved secure channel.');
+        Flash::set('success', 'Staff account created. The staff member can now request a one-time sign-in code using the verified email address.');
         $this->redirect('admin/users');
     }
 
@@ -183,7 +184,7 @@ final class SystemController extends Controller
         $sent = (new MailService())->send(
             $recipient,
             'SMTP test — Netaji College of Pharmacy',
-            '<p>This test confirms that the authenticated SMTP settings saved in the administration portal can deliver email.</p><p>Sent at ' . e(date('d-m-Y H:i:s T')) . '.</p>',
+            '<p>This test confirms that the SMTP settings saved in the administration portal can deliver email.</p><p>Sent at ' . e(date('d-m-Y H:i:s T')) . '.</p>',
             'smtp_test'
         );
         AuditService::log('smtp_settings_tested', 'settings', null, ['mail' => $mailConfiguration->auditSummary($before)], [

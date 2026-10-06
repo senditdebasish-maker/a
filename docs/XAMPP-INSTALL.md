@@ -32,7 +32,7 @@
    - Database: `netaji_pharmacy`
    - Username: `root`
    - Password: blank on an unchanged local XAMPP installation
-7. Create a strong Super Admin account. In **Email delivery**, keep **Local email log** for a safe local trial or select **SMTP with PHPMailer** and enter the institution’s provider/app-password details. Leave **demonstration data** unchecked for a real installation.
+7. Create the first Super Admin account. In **Email delivery**, enter the institution’s SMTP/app-password details. Every applicant, student and staff sign-in uses a one-time email code, so SMTP is required. Leave **demonstration data** unchecked for a real installation.
 8. The 2027–28 cycle starts in **Draft**. Review every rule before changing it to Open.
 
 If you prefer to make the project itself the htdocs root, copy the **contents** of the repository (not its containing folder) directly into `C:\xampp\htdocs`. The included root `index.php` and `.htaccess` provide the same clean URLs while protecting source/configuration directories. Back up or move the original XAMPP dashboard files first, then run the same PowerShell command from `C:\xampp\htdocs`; it detects that the project is already at the root and only normalises an existing `.env` to `APP_URL=http://localhost`.
@@ -55,18 +55,18 @@ Point Apache directly at `public/`, not the project root:
 
 Add `127.0.0.1 pharmacy.local` to the Windows hosts file, restart Apache, and update `APP_URL=http://pharmacy.local` in `.env`.
 
-## Local email, SMTP and MFA
+## Passwordless email sign-in and SMTP
 
-The installer keeps **Local email log** selected by default and writes `REQUIRE_STAFF_MFA=false`, so a local setup cannot lock its first administrator out. Messages in log mode appear in **Admin → Email log** and are not sent.
+Every applicant, student and staff member signs in with a six-digit email code. The installer therefore requires **SMTP with PHPMailer**; Local email log mode cannot deliver a secret sign-in code and is not offered for a new installation. The installer validates the selected host, port, encryption, sender and authentication details before installing, but it does **not** send a message during database creation.
 
-If Composer dependencies are installed, the installer also offers **SMTP with PHPMailer**. It validates the selected host, port, encryption, sender and (when enabled) credentials before installing, but it does **not** send a message during database creation. SMTP credentials are never redisplayed or included in the email log; the first-run values are written only to the protected `.env` file. Restrict OS/project-folder access to that file.
+Codes expire after 10 minutes, are one-time use, permit five attempts and cannot be requested again for 60 seconds. The portal gives the same delivery response for unknown and known addresses, reducing email-address enumeration. Authentication emails never retain codes, links or message bodies in **Admin → Email log**.
 
-Before production:
+SMTP credentials are never redisplayed or included in the email log; the first-run values are written only to the protected `.env` file. Restrict OS/project-folder access to that file. Before admitting real users:
 
-1. Sign in as a super administrator and open **Settings → Email & SMTP**.
-2. Use **Save & send test email**. When credentials are saved from Admin Settings, the password is encrypted in the database and is never displayed again.
-3. Test verification, password reset and staff OTP delivery.
-4. Change `REQUIRE_STAFF_MFA=true` only after delivery succeeds.
+1. Complete the installer using a real accessible Super Admin email address.
+2. Open the sign-in page and confirm a Super Admin email code arrives and works.
+3. Sign in, open **Settings → Email & SMTP**, then use **Save & send test email**. When credentials are saved from Admin Settings, the password is encrypted in the database and is never displayed again.
+4. Test applicant email verification and passwordless sign-in before publishing a cycle.
 5. Use HTTPS and change `SESSION_SECURE=true`.
 
 You may instead configure the `.env` values shown below for deployment automation. Saved Admin Settings take precedence over those fallback values.
@@ -90,7 +90,7 @@ MAIL_TIMEOUT=20
 
 Keep `MAIL_FROM_ADDRESS` the same as the authenticated Gmail account unless Google Workspace has authorised another sender. Restart Apache after editing `.env`, request a new message, check Spam, and review **Admin → Email log** for `sent` or `failed` plus the provider error. Google Workspace administrators may need to permit App Passwords or provide the institution's approved SMTP relay.
 
-For an installation that is currently stuck at the OTP screen, temporarily set `REQUIRE_STAFF_MFA=false`, restart Apache, sign in, finish and test SMTP, then set it back to `true`. Never paste SMTP credentials into chat or commit them to Git.
+If email codes do not arrive, do not disable sign-in security. Check the sender address, provider restrictions, Spam folder and **Admin → Email log** using a currently authorised administrator session; then correct and test SMTP. Never paste SMTP credentials into chat or commit them to Git.
 
 ## Scheduled encrypted backups
 
@@ -116,3 +116,9 @@ Offer expiry releases a still-unpaid seat but deliberately does not auto-promote
 ## Static previews
 
 When PHP is unavailable, `public/preview.html`, `student-preview.html`, and `admin-preview.html` show the visual prototype only. The working PHP application uses `public/index.php`.
+
+### Upgrading an existing installation
+
+Before replacing an existing portal with this passwordless release, use the currently running portal to sign in as a Super Admin. In **Admin Settings → Email & SMTP**, save SMTP credentials and use **Save & send test email**. Only then deploy the new files and test an email-code sign-in.
+
+Do not rely on an `.env` SMTP change alone when the database already has mail settings: saved mail settings take precedence. An old Local log configuration suppresses authentication secrets by design, so it cannot deliver a sign-in code. Take an encrypted backup before any configuration or deployment change.

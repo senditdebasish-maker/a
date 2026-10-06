@@ -50,7 +50,7 @@ $unknownApplicationStates=$db->all("SELECT status, COUNT(*) AS total FROM applic
 foreach ($unknownApplicationStates as $row) $warnings[]="Unknown application status {$row['status']} appears on {$row['total']} record(s).";
 $capacityMismatch=$db->all('SELECT cp.id, cp.seat_capacity, COALESCE(SUM(sm.seats),0) AS matrix_total FROM cycle_programs cp LEFT JOIN seat_matrix sm ON sm.cycle_program_id=cp.id GROUP BY cp.id HAVING matrix_total <> cp.seat_capacity');
 foreach ($capacityMismatch as $row) $warnings[]="Cycle-program #{$row['id']} capacity {$row['seat_capacity']} differs from seat matrix total {$row['matrix_total']}.";
-$sensitive=(int)$db->scalar("SELECT COUNT(*) FROM mail_logs WHERE template_key IN ('verify_email','password_reset','staff_mfa') AND body_html IS NOT NULL");
+$sensitive=(int)$db->scalar("SELECT COUNT(*) FROM mail_logs WHERE template_key IN ('verify_email','password_reset','staff_mfa','login_otp') AND body_html IS NOT NULL");
 if ($sensitive) $warnings[]="{$sensitive} authentication-secret mail body/bodies require approved migration redaction.";
 $legacySelected=(int)$db->scalar("SELECT COUNT(*) FROM applications WHERE status IN ('selected','fee_verified','admitted')" . ($columnExists('applications','selected_cycle_program_id') ? ' AND selected_cycle_program_id IS NULL' : ''));
 if ($legacySelected) $warnings[]="{$legacySelected} selected/admitted legacy application(s) require selected-program reconciliation.";

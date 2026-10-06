@@ -54,9 +54,9 @@
     });
   });
 
-  // Settings: explain the selected delivery mode and keep SMTP credentials private.
+  // Passwordless sign-in requires SMTP. Keep validation and credential controls
+  // active without offering an unsafe local-log switch.
   all('[data-mail-settings]').forEach((settings) => {
-    const driver = one('[data-mail-driver]', settings);
     const auth = one('[data-mail-auth]', settings);
     const password = one('[data-mail-password]', settings);
     const clearPassword = one('[data-mail-clear-password]', settings);
@@ -64,38 +64,31 @@
     const modeBadge = one('[data-mail-mode-badge]', settings);
     const modeCopy = one('[data-mail-mode-copy]', settings);
     const testButton = one('[data-mail-test]', settings);
-    if (!driver) return;
-
     const syncMailSettings = () => {
-      const smtp = driver.value === 'smtp';
       const authenticated = Boolean(auth?.checked);
       const clearing = Boolean(clearPassword?.checked);
-      settings.classList.toggle('is-mail-log-mode', !smtp);
-      all('[data-smtp-required]', settings).forEach((field) => { field.required = smtp; });
-      all('[data-smtp-auth-required]', settings).forEach((field) => { field.required = smtp && authenticated; });
+      all('[data-smtp-required]', settings).forEach((field) => { field.required = true; });
+      all('[data-smtp-auth-required]', settings).forEach((field) => { field.required = authenticated; });
       if (password) {
         password.disabled = clearing;
-        password.required = smtp && authenticated && password.dataset.passwordConfigured !== '1' && !clearing;
+        password.required = authenticated && password.dataset.passwordConfigured !== '1' && !clearing;
         if (clearing) password.value = '';
       }
       if (passwordToggle) passwordToggle.disabled = clearing;
       if (testButton) {
-        testButton.disabled = !smtp;
-        testButton.title = smtp ? 'Save these settings and send a real test email.' : 'Select SMTP delivery to send a test email.';
+        testButton.disabled = false;
+        testButton.title = 'Save these settings and send a real test email.';
       }
       if (modeBadge) {
-        modeBadge.classList.toggle('is-live', smtp);
-        modeBadge.classList.toggle('is-log', !smtp);
-        modeBadge.textContent = smtp ? 'SMTP enabled' : 'Local log mode';
+        modeBadge.classList.add('is-live');
+        modeBadge.classList.remove('is-log');
+        modeBadge.textContent = 'SMTP required';
       }
       const modeTitle = modeCopy?.querySelector('b');
       const modeDescription = modeCopy?.querySelector('span');
-      if (modeTitle) modeTitle.textContent = smtp ? 'Live delivery selected' : 'Development safety mode';
-      if (modeDescription) modeDescription.textContent = smtp
-        ? 'Messages will be delivered through the server below after validation.'
-        : 'Non-sensitive messages are logged; OTPs and account links are suppressed.';
+      if (modeTitle) modeTitle.textContent = 'Passwordless sign-in delivery';
+      if (modeDescription) modeDescription.textContent = 'Every sign-in code is delivered through SMTP.';
     };
-
     passwordToggle?.addEventListener('click', () => {
       if (!password) return;
       const visible = password.type === 'text';
@@ -103,7 +96,6 @@
       passwordToggle.textContent = visible ? 'Show' : 'Hide';
       passwordToggle.setAttribute('aria-pressed', String(!visible));
     });
-    driver.addEventListener('change', syncMailSettings);
     auth?.addEventListener('change', syncMailSettings);
     clearPassword?.addEventListener('change', syncMailSettings);
     syncMailSettings();

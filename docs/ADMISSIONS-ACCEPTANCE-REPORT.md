@@ -172,7 +172,7 @@ Implemented controls:
 - Path canonicalization and containment checks before streaming files.
 - Transaction locks and optimistic `status_version` checks around decisions.
 - Server-derived cycle availability, programme membership, status transitions, eligibility, assessments, fees and allocation capacity.
-- Authentication mail bodies containing verification/reset/MFA secrets are redacted from `mail_logs`; only safe metadata/checksums remain.
+- Authentication mail bodies containing verification links and sign-in-code secrets are redacted from `mail_logs`; only safe metadata/checksums remain.
 - Authenticated SMTP can be configured and tested from the permission-protected Admin Settings workspace. The password uses AES-256-GCM at rest, is write-only in the interface, is excluded from old-input and audit data, and safely overrides the `.env` fallback without disabling TLS certificate verification.
 - CSV cells beginning with spreadsheet formula/control prefixes receive a leading apostrophe.
 

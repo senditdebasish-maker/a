@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'driver' => env('MAIL_DRIVER', 'log'),
+    'driver' => env('MAIL_DRIVER', 'smtp'),
     'host' => env('MAIL_HOST', ''),
     'port' => (int) env('MAIL_PORT', 587),
     'auth' => filter_var(env('MAIL_AUTH', true), FILTER_VALIDATE_BOOL),

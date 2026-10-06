@@ -23,6 +23,11 @@ $required = [
     'app/Controllers/Admin/ReportController.php',
     'app/Controllers/Admin/MeritController.php',
     'app/Controllers/ApplicantController.php',
+    'app/Controllers/AuthController.php',
+    'app/Core/Auth.php',
+    'app/Services/MailService.php',
+    'app/Services/MailConfigurationService.php',
+    'resources/views/auth/login-otp.php',
     'app/Services/AdmissionCycleService.php',
     'app/Services/ApplicationWorkflowService.php',
     'app/Services/EligibilityService.php',
@@ -63,12 +68,38 @@ $mustContainRoutes = [
     "GET', '/student/dashboard'",
     "POST', '/student/application/submit'",
     "POST', '/student/application/document'",
+    "POST', '/login/otp'",
+    "POST', '/login/otp/resend'",
 ];
 
 foreach ($mustContainRoutes as $needle) {
     if (!str_contains($routes, $needle)) {
         throw new RuntimeException("Missing critical route: {$needle}");
     }
+}
+
+$authController = $text('app/Controllers/AuthController.php');
+foreach (['requestEmailOtp', 'verifyEmailOtp', 'resendEmailOtp', 'emailOtpCode', 'login_otp', 'password_verify', 'random_int'] as $needle) {
+    if (!str_contains($authController, $needle)) {
+        throw new RuntimeException("Passwordless authentication capability missing: {$needle}");
+    }
+}
+foreach (['verifyMfa', 'sendStaffMfaCode'] as $obsolete) {
+    if (str_contains($authController, $obsolete)) {
+        throw new RuntimeException("Obsolete password/MFA login surface remains: {$obsolete}");
+    }
+}
+$coreAuth = $text('app/Core/Auth.php');
+if (str_contains($coreAuth, 'function attempt(') || str_contains($coreAuth, 'password_verify')) {
+    throw new RuntimeException('Core authentication must not retain a password sign-in path.');
+}
+$mailService = $text('app/Services/MailService.php');
+if (!str_contains($mailService, "'login_otp'")) {
+    throw new RuntimeException('Email sign-in codes must be included in sensitive-mail redaction.');
+}
+$mailConfiguration = $text('app/Services/MailConfigurationService.php');
+if (!str_contains($mailConfiguration, "config('security.login_mode', 'email_otp')") || !str_contains($mailConfiguration, "driver !== 'smtp'")) {
+    throw new RuntimeException('Passwordless mode must reject non-SMTP mail configuration.');
 }
 
 $applicationController = $text('app/Controllers/Admin/ApplicationController.php');
@@ -116,4 +147,4 @@ foreach ([
     }
 }
 
-echo "System integrity checks passed: routes, workflow guards, lifecycle services and core schema surfaces are present.\n";
+echo "System integrity checks passed: passwordless sign-in, routes, workflow guards, lifecycle services and core schema surfaces are present.\n";

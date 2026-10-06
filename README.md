@@ -22,7 +22,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Accessible one-panel sliding workspaces for applicant steps, admission configuration, application review and settings, including direct hashes and browser back/forward navigation.
 - Public programme, admissions, facilities, faculty, notices, gallery, FAQ, contact, privacy and terms pages.
 - English/Bengali/Hindi interface dictionary foundation and CMS translation records with English fallback.
-- Email-verification registration, password recovery, login throttling and optional staff email OTP.
+- Email-verification registration and passwordless email-OTP sign-in for applicants, students and staff, with throttling, expiration and one-time-use protection.
 - Dedicated database-driven Admissions workspace for cycle lifecycle, publication readiness, programme catalogue/assignment, seat matrices, eligibility, dynamic forms, documents, fees, preview, versioning and safe duplication.
 - One active application attempt per cycle, with a data-preserving new attempt after rejection, complete attempt history and ranked programme choices.
 - Personal, address, guardian, Class 10/12, entrance exam, programme preference, declaration and secure document workflows.
@@ -39,7 +39,7 @@ These three files contain mock preview data only. The working PHP app starts at 
 - Printable/Dompdf-ready application summary, cover sheet, acknowledgement, correction memo, offer letter, admission confirmation and payment receipt.
 - Protected local storage, MIME/size checks, random paths, SHA-256 file checksums and permission-checked streaming.
 - Configurable Aadhaar stage, AES-256-GCM field encryption, masking, consent/audit/retention foundation.
-- Browser installer that creates a clean database, roles, permissions, B.Pharm, a versioned scheduled 2027–28 admission cycle, CMS content, optional PHPMailer/SMTP delivery and optional demonstration records.
+- Browser installer that creates a clean database, roles, permissions, B.Pharm, a versioned scheduled 2027–28 admission cycle, CMS content, required PHPMailer/SMTP delivery for passwordless sign-in and optional demonstration records.
 - Admin-triggered and lock-protected scheduled encrypted backup archives containing SQL + protected files, with configurable retention.
 - Production preflight, guarded restore and scheduled-backup commands plus launch checklists.
 
@@ -72,7 +72,7 @@ Then start Apache/MySQL and open:
 http://localhost/install/
 ```
 
-The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, offers safe local-mail logging or optional PHPMailer SMTP setup, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
+The launcher backs up XAMPP's existing htdocs entry files before replacement. The browser installer checks PHP extensions, creates a new database, seeds content, requires PHPMailer SMTP setup for passwordless email-code sign-in, writes `.env` outside `public/`, and locks itself after success. See [docs/XAMPP-INSTALL.md](docs/XAMPP-INSTALL.md) for the exact layout and an Apache virtual-host alternative.
 
 ## Demonstration accounts
 
@@ -118,7 +118,7 @@ This repository is a substantial Release 1 implementation, but **no generic soft
 
 1. Complete every item in [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md).
 2. Replace all fictional/placeholder content and legally review admissions/privacy/Aadhaar settings.
-3. Configure HTTPS, SMTP, staff MFA, permissions, monitoring and externally stored tested backups.
+3. Configure HTTPS, tested SMTP for email-code sign-in, permissions, monitoring and externally stored tested backups.
 4. Run `php scripts/preflight.php`.
 5. Perform security review, accessibility QA, browser/device QA, performance/load tests and a full user-acceptance test with Admissions, Accounts and management.
 
@@ -133,3 +133,7 @@ Release 1 admissions and website/CMS workflows are implemented. The sidebar item
 - [XAMPP installation](docs/XAMPP-INSTALL.md)
 - [Production checklist](docs/PRODUCTION-CHECKLIST.md)
 - [Privacy/Aadhaar note](docs/PRIVACY-AADHAAR-NOTICE.md)
+
+### Passwordless sign-in upgrade note
+
+Before deploying this release to an existing portal, sign in to the **currently running** portal as a Super Admin, configure SMTP under **Admin Settings → Email & SMTP**, and use **Save & send test email**. Deploy the passwordless release only after that succeeds, then verify an email-code sign-in. A saved database mail configuration overrides `.env`; an existing Local log configuration will deliberately block sign-in-code delivery.

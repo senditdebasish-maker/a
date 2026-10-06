@@ -113,6 +113,7 @@ jobs:
           APP_FALLBACK_LOCALE=en
           APP_CURRENCY=INR
           APP_DATE_FORMAT=d-m-Y
+          LOGIN_MODE=email_otp
           APP_INSTALLED=true
           DB_DRIVER=mysql
           DB_HOST=127.0.0.1
@@ -130,7 +131,6 @@ jobs:
           UPLOAD_MAX_MB=5
           BACKUP_ENCRYPTION=true
           BACKUP_RETENTION_DAYS=30
-          REQUIRE_STAFF_MFA=false
           ENV
       - name: Audit admin routes and permissions
         run: php scripts/ci-route-audit.php
@@ -150,11 +150,6 @@ jobs:
           php scripts/admissions-preflight.php
           sed -i 's/DB_DATABASE=ncp_upgrade/DB_DATABASE=ncp_test/' .env
       - name: Exercise admission workflow invariants
-<<<<<<< HEAD
-        run: php scripts/ci-admission-workflow.php
-      - name: Exercise release system integrity checks
-        run: php scripts/ci-system-integrity.php
-=======
         shell: bash
         run: |
           if ! workflow_output=$(php scripts/ci-admission-workflow.php 2>&1); then
@@ -174,7 +169,8 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$scale_output"
->>>>>>> arena/01a0f38a-a
+      - name: Exercise release system integrity checks
+        run: php scripts/ci-system-integrity.php
       - name: Exercise public, applicant, staff, CMS and PDF routes
         run: |
           mkdir -p storage/logs storage/cache storage/sessions storage/backups storage/private

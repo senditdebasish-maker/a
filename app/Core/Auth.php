@@ -9,27 +9,6 @@ final class Auth
     private static ?array $user = null;
     private static bool $resolved = false;
 
-    public static function attempt(string $email, string $password): bool
-    {
-        $email = mb_strtolower(trim($email));
-        $db = Database::get();
-        $user = $db->fetch('SELECT * FROM users WHERE email = :email AND deleted_at IS NULL LIMIT 1', ['email' => $email]);
-        if (!$user || !password_verify($password, (string) $user['password_hash']) || $user['status'] !== 'active') {
-            self::recordAttempt($email, false);
-            return false;
-        }
-
-        self::recordAttempt($email, true);
-        session_regenerate_id(true);
-        $_SESSION['user_id'] = (int) $user['id'];
-        $_SESSION['last_activity'] = time();
-        Csrf::rotate();
-        $db->update('users', ['last_login_at' => date('Y-m-d H:i:s'), 'last_login_ip' => self::ip()], 'id = :id', ['id' => $user['id']]);
-        self::$user = null;
-        self::$resolved = false;
-        return true;
-    }
-
     public static function check(): bool
     {
         return self::user() !== null;
@@ -105,37 +84,10 @@ final class Auth
 
     public static function logout(): void
     {
-        unset($_SESSION['user_id'], $_SESSION['mfa_verified_at']);
+        unset($_SESSION['user_id'], $_SESSION['email_otp_verified_at'], $_SESSION['email_otp_pending_email'], $_SESSION['email_otp_requested_at'], $_SESSION['email_otp_pending_user_id'], $_SESSION['email_otp_challenge_id']);
         self::$user = null;
         self::$resolved = true;
         session_regenerate_id(true);
         Csrf::rotate();
-    }
-
-    public static function throttled(string $email): bool
-    {
-        $minutes = (int) config('security.login_decay_minutes', 15);
-        $max = (int) config('security.login_max_attempts', 5);
-        $count = Database::get()->scalar(
-            'SELECT COUNT(*) FROM login_attempts WHERE (email = :email OR ip_address = :ip) AND successful = 0 AND attempted_at >= :since',
-            ['email' => mb_strtolower(trim($email)), 'ip' => self::ip(), 'since' => date('Y-m-d H:i:s', time() - ($minutes * 60))]
-        );
-        return (int) $count >= $max;
-    }
-
-    private static function recordAttempt(string $email, bool $successful): void
-    {
-        Database::get()->insert('login_attempts', [
-            'email' => $email,
-            'ip_address' => self::ip(),
-            'user_agent' => mb_substr($_SERVER['HTTP_USER_AGENT'] ?? 'unknown', 0, 500),
-            'successful' => $successful ? 1 : 0,
-            'attempted_at' => date('Y-m-d H:i:s'),
-        ]);
-    }
-
-    private static function ip(): string
-    {
-        return mb_substr($_SERVER['REMOTE_ADDR'] ?? 'unknown', 0, 45);
     }
 }

@@ -31,7 +31,7 @@ $check('HTTPS application URL', str_starts_with((string) env('APP_URL', ''), 'ht
 $check('Secure session cookies', filter_var(env('SESSION_SECURE', false), FILTER_VALIDATE_BOOL));
 $mailConfiguration = (new MailConfigurationService())->current();
 $check('SMTP email configured', !empty($mailConfiguration['complete']), 'Current driver: ' . $mailConfiguration['driver'] . '; source: ' . $mailConfiguration['source']);
-$check('Staff MFA required', filter_var(env('REQUIRE_STAFF_MFA', false), FILTER_VALIDATE_BOOL));
+$check('Passwordless email-code sign-in mode', (string) env('LOGIN_MODE', 'email_otp') === 'email_otp');
 foreach (['private','backups','logs','cache'] as $folder) $check('Writable storage/' . $folder, is_dir(BASE_PATH . '/storage/' . $folder) && is_writable(BASE_PATH . '/storage/' . $folder));
 try {
     $db = Database::get();

@@ -24,7 +24,7 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Set `APP_DEBUG=false`, a unique `APP_KEY`, `APP_ENV=production`, exact HTTPS `APP_URL`, and `SESSION_SECURE=true`.
 - [ ] Use HTTPS with automatic certificate renewal and HSTS at the proxy/web-server layer.
 - [ ] Restrict database and filesystem permissions; never expose `.env`, `storage/`, logs, or backups.
-- [ ] Configure authenticated SMTP in Admin Settings (or the `.env` fallback), use **Save & send test email**, then enable staff MFA only after testing OTP delivery and recovery.
+- [ ] Configure SMTP in Admin Settings (or the `.env` fallback), use **Save & send test email**, then confirm applicants and staff can complete passwordless email-code sign-in.
 - [ ] Configure PHP upload/body limits consistently with the application limit.
 - [ ] Add malware scanning for uploads if required by the institution’s risk assessment.
 
@@ -33,7 +33,7 @@ The software foundation cannot certify institutional, legal, payment, regulatory
 - [ ] Create named staff accounts; do not share Super Admin credentials.
 - [ ] Review every role and permission using least privilege.
 - [ ] Separate admission decisions, document checks, and payment verification where staffing permits.
-- [ ] Test suspended users, password resets, throttling, session expiry, staff MFA, and audit visibility.
+- [ ] Test suspended users, email-code expiry, resend cooldown, invalid-code throttling, session expiry, and audit visibility.
 - [ ] Review logs without storing plaintext identity/payment secrets.
 
 ## Backup and recovery

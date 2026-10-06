@@ -18,16 +18,16 @@
 - `public/` is the only intended web root.
 - Applicant documents, payment proofs, logs, and backups stay under `storage/`.
 - `FileController` streams private files only after owner/permission checks and path canonicalisation.
-- Passwords use PHP `password_hash`/`password_verify`.
+- Passwordless sign-in uses six-digit email codes stored only as password hashes; the legacy password hash column holds an unshared compatibility value.
 - Configured identity values use AES-256-GCM through the application key; lists display only the last four digits.
 - POST routes require a session CSRF token.
-- Login attempts are recorded and throttled.
+- Email-code attempts are limited, expire quickly and are auditable.
 - Privileged workflows use role/permission checks and audit records.
-- Staff MFA uses an expiring hashed email OTP when enabled.
+- Every applicant, student and staff session requires an expiring hashed email OTP.
 
 ## Core domains
 
-1. **Identity and access** — users, expanded roles, granular permissions, verification, recovery, MFA.
+1. **Identity and access** — users, expanded roles, granular permissions, email verification and passwordless email-code sign-in.
 2. **Admissions** — sessions, cycles, programmes, rules, seat matrix, preferences, application state history, assignments, notes.
 3. **Evidence** — configurable document checklist, protected uploads, integrity checksums, review decisions.
 4. **Finance hand-off** — manual UPI/bank/cash proof, separate Accounts verification, receipt number.
@@ -46,5 +46,5 @@ Every transition creates an immutable history entry. Correction/rejection remark
 
 - Add schema versions under `database/` and record them in `schema_migrations`.
 - Add storage drivers behind `UploadService` for S3-compatible storage later.
-- Replace logged mail with SMTP through `MailService`.
+- Configure SMTP through `MailService` before enabling sign-in for real users.
 - Add academic modules against existing departments, programmes, academic sessions, identities and RBAC rather than duplicating master data.
